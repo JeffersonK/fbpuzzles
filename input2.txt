@@ -1,0 +1,16 @@
+6
+kitchen	      .05
+front_door    .2
+in_cabinet    .3
+under_bed     .3
+behind_blinds .05
+living_room   .1
+8	      
+front_door under_bed     5
+under_bed  behind_blinds 9
+front_door in_cabinet    2
+front_door behind_blinds 5
+in_cabinet behind_blinds 6
+front_door living_room   5
+living_room kitchen	 10
+in_cabinet kitchen	 3

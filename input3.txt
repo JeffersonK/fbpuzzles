@@ -1,0 +1,9 @@
+3
+front_door    .2
+in_cabinet    .4
+under_bed     .4
+3
+front_door under_bed     5
+front_door in_cabinet    2
+in_cabinet under_bed	 6
+
