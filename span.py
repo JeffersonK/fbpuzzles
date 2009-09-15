@@ -2,6 +2,9 @@ from pprint import *
 import sys
 import path as pathalgs
 import graph as nx
+
+import matplotlib.pyplot as plt
+import networkx
 #
 #
 #
@@ -39,8 +42,8 @@ def safe_readline(fileObj):
 #
 def loadfile(filename):
 	file = None
-	prLocs = {} #dictionary to hold probabilities
-	g = Graph()
+	#prLocs = {} #dictionary to hold probabilities
+	g = nx.Graph()
 
 	try:
 		file = open(filename, 'r')
@@ -56,7 +59,6 @@ def loadfile(filename):
 			print "File Format Error: Integer Expected"
 			sys.exit(-1)
 			
-
 	startLoc = None
 	for i in range(num_search_locs):
 		(linelen, line) = safe_readline(file)
@@ -74,13 +76,10 @@ def loadfile(filename):
 			print "File Format Error: Float Expected"
 			sys.exit(-1)
 			
-		prLocs[toks[0]] = pr
-		g.addVertex(toks[0])
+                g.add_node(toks[0], p=pr)
+
 	#	
 	#now parse the nodes in the graph
-	#gEdges = {}
-
-
 	(linelen, line) = safe_readline(file)
 	num_edges = safe_toInt(line)
 	if num_edges == None:
@@ -101,17 +100,10 @@ def loadfile(filename):
 			print "File Format Error: Integer Expected"
 			sys.exit(-1)
 
-		#gEdges[(toks[0],toks[1])] = secs
-		
-		#g.addVertex(toks[0])
-		#g.addVertex(toks[1])
-		g.addEdge(toks[0],toks[1], secs)
-		g.addEdge(toks[1],toks[0], secs)
+		g.add_edge(toks[0],toks[1], {'weight':secs})
 
-	
 	file.close()
-
-	return (startLoc, prLocs, g)#gEdges)
+	return (startLoc, g)
 
 #if there are no cycles in a graph 
 #then there is no edge you can delete
@@ -184,19 +176,95 @@ def generate_all_spanning_trees(G):
 #
 #
 #
-def calcMinWalk(nodeset, edgeset):
-    return    
+def calcMinWalk(startNode, g):#nodeset, edgeset):
+    #g = nx.Graph()
+    #g.add_nodes_from(nodeset)
+    #g.add_edges_from(edgeset)
+    print "*** %s" % g.nodes(data=True)
+    print "### %s" % g.edges(data=True) 
+    return subTreeMinWalk(g, None, startNode, 0, 0)
 
 
-#return (minWalkTime, maxWalkTime)
-def minWalk(currentNode, totWalkTime):
-    return
+#g is a graph with no cycles becaues it is a
+#spanning tree
+#return (minExpectedWalkTime, maxExpectedWalkTime, totTimeExlapsed)
+def subTreeMinWalk(g, previousNode, currentNode, totExpWalk, tAccum):
+
+    print currentNode
+    #print g.edges()
+    #list neighbors
+    neighbors = g.neighbors(currentNode)
+    
+    #we are at a leaf node
+    if len(neighbors) == 1:
+        if previousNode == None:
+            #we are at the root
+            return (0.00, 0.00)
+
+        dt = g[previousNode][currentNode]['weight']
+        min = (tAccum + dt)*g.node[currentNode]['p']
+        return (min, tAccum+dt)
+
+    #there is only one choice of path
+    if len(neighbors) == 2:
+        if previousNode != None:
+            neighbors.remove(previousNode)
+        minExpWalk = None
+        tTot = None
+        if previousNode == None:
+            (minExpWalk, tTot) = subTreeMinWalk(g, currentNode, neighbors[0], 0, 0)
+
+        else:
+            dt = g[previousNode][currentNode]['weight']
+            print g.node[currentNode]
+            (minExpWalk, tTot) = subTreeMinWalk(g, currentNode, neighbors[0], 
+                                                (tAccum + dt)*g.node[currentNode]['p'], tAccum + dt)
+        #send same values back but account for traversing this edge again
+        return (minExpWalk, tTot)
+
+    #generate a list of all possible sequences to visit neighbors.
+    if previousNode != None:
+        neighbors.remove(previousNode)
+    items = neighbors
+
+    #should only generate lists of length len(neighbors)
+    neighbors_visit_orders = [[x for (pos,x) in zip(range(len(items)), items) if (2**pos) & switches] for switches in range(2**len(items))]
+    minMinExpWalk = 1e9
+    minTimeElapsed = None
+    minVisitOrder = []
+    for neighbor_visit_order in neighbors_visit_orders:
+
+        if neighbor_visit_order != len(neighbors):
+            continue
+
+        print neighbor_visit_order
+        minExpWalk_order = totExpWalk
+        totTime_order = tAccum
+        for n in neighbor_visit_order:
+            minWalk = None
+            t = None
+            if previousNode == None:
+                (minWalk, t) = subTreeMinWalk(g, currentNode, n, minExpWalk_order, totTime_order)
+            else:
+                dt = g[previousNode][currentNode]['weight']
+                (minWalk, t) = subTreeMinWalk(g,currentNode, n, 
+                                              minExpWalk_order + (totTime_order + dt)*g.node[currentNode]['p'], 
+                                              totTime_order + dt) 
+            minExpWalk_order += minWalk
+            totTime_order += t
+
+        #keep track of the best
+        if minExpWalk_order < minMinExpWalk:
+            minMinExpWalk = minExpWalk_order
+            minTimeElapsed = totTime_order
+            minVisitOrder = neighbor_visit_order
+        
+    print "MIN VISIT ORDER: %s" % minVisitOrder
+    return (minMinExpWalk, minTimeElapsed)
 
 
-#
-#
-#
-def main():
+
+def testGraph1():
     edges = [(1,2,{'weight':7}),
              (2,1,{'weight':7}),
              (1,3,{'weight':14}),
@@ -218,6 +286,31 @@ def main():
 
     G = nx.Graph()
     G.add_edges_from(edges)
+    return G
+#
+#
+#
+def main():
+
+    #G = testGraph1()
+    startNode, G = loadfile(sys.argv[1])
+
+    pprint(G.nodes(data=True))
+    pprint(G.edges(data=True))
+    networkx.draw(G)
+    
+    #pos = {}
+    #labels = {}
+    #i = 1
+    #for n in G.nodes():
+    #    pos[n] = (i, i)
+    #    labels[n] = G.node[n]['p']
+    #    i += 1
+    #networkx.draw_networkx_labels(G, pos, labels)
+
+    #plt.savefig("C.png")
+    #plt.show()
+    #plt.close()
 
     if not is_connected(G):
         #not garaunteed to find her
@@ -227,20 +320,41 @@ def main():
     nodeset = G.nodes()
 
     SpanningTrees = generate_all_spanning_trees(G)
-    pprint(SpanningTrees)
-    return
+    #pprint(SpanningTrees)
+    #return
 
     minTree = None
     minWalkTime = 1e6 #INF
     minWalk = None
+    #i=0
     for edgeset in SpanningTrees:
-        (walk, walkTime) = calcMinWalk(nodeset, edgeset)
+        C = nx.Graph()
+        C.add_edges_from(edgeset)
+        C.add_nodes_from(nodeset)
+
+        for n in nodeset:
+            C.node[n]['p'] = G.node[n]['p']
+
+        #print C.nodes(data=True)
+        #print C.edges(data=True)
+        #networkx.draw(C)
+        #plt.savefig("C-%d.png"%i)
+        #plt.show()
+        #plt.close()
+        #i += 1
+        #C = None
+        
+        (walk, walkTime) = calcMinWalk(startNode, C)#nodeset, edgeset)
         if walkTime < minWalkTime:
             minWalk = walk
-            minTree = tree
-    
+            minGraph = C
+            minWalkTime = walkTime
 
-    
+        C = None
+
+    print minGraph.edges()
+    print minWalk
+    print minWalkTime
         
     return #END MAIN
 
