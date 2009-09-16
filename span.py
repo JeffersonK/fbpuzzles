@@ -1,6 +1,6 @@
 #DEBUG SWITCHES
-WITH_MATPLOT = 0
-WITH_NETWORKX = 0
+WITH_MATPLOT = 1
+WITH_NETWORKX = 1
 DEBUG = 1
 
 #GLOBALS
@@ -10,7 +10,7 @@ from pprint import *
 import sys
 import path as pathalgs
 import graph as nx
-import perm
+
 if WITH_MATPLOT and WITH_NETWORKX:
 	import matplotlib.pyplot as plt
 	import networkx
@@ -45,6 +45,7 @@ def safe_readline(fileObj):
 		return (len(l), l)
 	except:
 		return (-1, None)
+
 
 #
 #
@@ -114,17 +115,49 @@ def loadfile(filename):
 	file.close()
 	return (startLoc, g)
 
+#
+#
+#
+def perm(items, n=None):
+    if n is None:
+        n = len(items)
+    for i in range(len(items)):
+        v = items[i:i+1]
+        if n == 1:
+            yield v
+        else:
+            rest = items[:i] + items[i+1:]
+            for p in perm(rest, n-1):
+                yield v + p
+
+#
+#
+#
+def comb(items, n=None):
+    if n is None:
+        n = len(items)
+    for i in range(len(items)):
+        v = items[i:i+1]
+        if n == 1:
+            yield v
+        else:
+            rest = items[i+1:]
+            for c in comb(rest, n-1):
+                yield v + c
+
+
 #if there are no cycles in a graph 
 #then there is no edge you can delete
 #where the graph is still connected
+#can prove by contradiction trivially
 def is_connected(Graph):
+
     nodes = Graph.nodes()
-    #print nodes
     path = pathalgs.single_source_dijkstra_path(Graph, nodes[0])
+
     if len(nodes) != len(path.keys()):
         return False
 
-    #print "%s == %s" % (nodes, path.keys())
     return True
 
 #
@@ -227,12 +260,12 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
 	    
         #send same values back but account for traversing this edge again
         return (minExpWalk + (tHere*g.node[currentNode]['p']), 
-		tHere + 2*dtHere, 
+		tTot + dtHere, 
 		[currentNode] + pathAccum)
 
     #generate a list of all possible sequences to visit neighbors.
     #should only generate lists of length len(neighbors)
-    neighbors_visit_orders = perm.perm(neighbors)
+    neighbors_visit_orders = perm(neighbors)
     
     minMinExpWalk = INF
     minTimeElapsed = None
@@ -261,14 +294,15 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
         for n in neighbor_visit_order:
 	    (minExpWalk, resultT, path) = subTreeMinWalk(g,currentNode, n, totTime_order) 
 	    minExpWalk_order += minExpWalk
-            totTime_order = resultT + (resultT - totTime_order)
+            totTime_order = resultT# + tHere
 	    pathAccum += path
 	    
 	    #account for the fact that we have to come back through
 	    #this subtree if its not the last subtree in the optimal
 	    #walk of the spanning tree
 	    if i < len(neighbor_visit_order):
-		    pathAccum += [currentNode]
+		    path.reverse()
+		    pathAccum += path[1:] + [currentNode]
 	    i += 1
 
 	if DEBUG:
@@ -279,13 +313,13 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
             minTimeElapsed = totTime_order
             minVisitOrder = neighbor_visit_order
 	    minPath = pathAccum
-    if DEBUG:
+	if DEBUG:
 	    print "\t\tMIN VISIT ORDER: %s" % minVisitOrder
 	    print "\t\tMIN PATH: %s" % minPath
     #now account for the walk from the previous node to this node
     dExpWalk = tHere*g.node[currentNode]['p']
     #dt = minTimeElapsed - tHere (change in time from traversing this subtree)
-    return (dExpWalk + minMinExpWalk, minTimeElapsed + 2*dtHere, [currentNode] + minPath)
+    return (dExpWalk + minMinExpWalk, minTimeElapsed + dtHere, [currentNode] + minPath)
 
 
 
@@ -328,7 +362,7 @@ def main():
     
     if not is_connected(G):
         #not gauranteed to find her
-        print "-1.00"
+        print "-1.00\n"
         return
 
     nodeset = G.nodes()
@@ -387,7 +421,7 @@ def main():
 	    print "EDGE SET:          %s" % minGraph.edges(data=True)
 	    print
         
-    print "%.2f" % minExpWalkTime
+    print "%.2f\n" % minExpWalkTime
     return #END MAIN
 
 
