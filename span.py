@@ -2,7 +2,7 @@ from pprint import *
 import sys
 import path as pathalgs
 import graph as nx
-
+import perm
 import matplotlib.pyplot as plt
 import networkx
 #
@@ -180,78 +180,78 @@ def calcMinWalk(startNode, g):#nodeset, edgeset):
     #g = nx.Graph()
     #g.add_nodes_from(nodeset)
     #g.add_edges_from(edgeset)
-    print "*** %s" % g.nodes(data=True)
-    print "### %s" % g.edges(data=True) 
-    return subTreeMinWalk(g, None, startNode, 0, 0)
+    #print "*** %s" % g.nodes(data=True)
+    print "\nTRYING SPANNING TREE: %s" % g.edges(data=True) 
+    return subTreeMinWalk(g, None, startNode, 0)
 
 
 #g is a graph with no cycles becaues it is a
 #spanning tree
-#return (minExpectedWalkTime, maxExpectedWalkTime, totTimeExlapsed)
-def subTreeMinWalk(g, previousNode, currentNode, totExpWalk, tAccum):
-
-    print currentNode
-    #print g.edges()
-    #list neighbors
-    neighbors = g.neighbors(currentNode)
+#return (minExpWalk, totTimeExlapsed)
+def subTreeMinWalk(g, previousNode, currentNode, tAccum):
+    print "PREVIOUS NODE: %s" % previousNode
+    print "CURRENT NODE:  %s" % currentNode
     
-    #we are at a leaf node
-    if len(neighbors) == 1:
-        if previousNode == None:
-            #we are at the root
-            return (0.00, 0.00)
+    neighbors = g.neighbors(currentNode)
+    if previousNode != None and previousNode in neighbors:
+	    neighbors.remove(previousNode)
+    print "NEIGHBORS: %s" % neighbors
 
+    #we are at a leaf node
+    if len(neighbors) == 0:
         dt = g[previousNode][currentNode]['weight']
         min = (tAccum + dt)*g.node[currentNode]['p']
         return (min, tAccum+dt)
 
     #there is only one choice of path
-    if len(neighbors) == 2:
-        if previousNode != None:
-            neighbors.remove(previousNode)
-        minExpWalk = None
-        tTot = None
-        if previousNode == None:
-            (minExpWalk, tTot) = subTreeMinWalk(g, currentNode, neighbors[0], 0, 0)
+    if len(neighbors) == 1:
+        dtHere = 0.0
+	if previousNode == None:
+		dtHere = 0.0
+	else:
+		dtHere = g[previousNode][currentNode]['weight']
 
-        else:
-            dt = g[previousNode][currentNode]['weight']
-            print g.node[currentNode]
-            (minExpWalk, tTot) = subTreeMinWalk(g, currentNode, neighbors[0], 
-                                                (tAccum + dt)*g.node[currentNode]['p'], tAccum + dt)
+	tHere = tAccum + dtHere
+	(minExpWalk, tTot) = subTreeMinWalk(g, currentNode, neighbors[0], tHere)
+	    
         #send same values back but account for traversing this edge again
-        return (minExpWalk, tTot)
+        return (minExpWalk + (tHere*g.node[currentNode]['p']), tHere)
 
     #generate a list of all possible sequences to visit neighbors.
-    if previousNode != None:
-        neighbors.remove(previousNode)
-    items = neighbors
-
+    #items = neighbors
+    print "NEIGHBORS: %s" % neighbors
     #should only generate lists of length len(neighbors)
-    neighbors_visit_orders = [[x for (pos,x) in zip(range(len(items)), items) if (2**pos) & switches] for switches in range(2**len(items))]
+    #neighbors_visit_orders = [[x for (pos,x) in zip(range(len(items)), items) if (2**pos) & switches] for switches in range(2**len(items))]
+    neighbors_visit_orders = perm.perm(neighbors)
+    
+    #print "ENUMERATION OF VISIT ORDERS: %s" % neighbors_visit_orders
     minMinExpWalk = 1e9
     minTimeElapsed = None
     minVisitOrder = []
-    for neighbor_visit_order in neighbors_visit_orders:
 
+
+    dtHere = 0.0
+    if previousNode == None:
+	    dtHere = 0.0
+    else:
+	    dtHere = g[previousNode][currentNode]['weight'] 
+
+    tHere = tAccum + dtHere
+
+    for neighbor_visit_order in neighbors_visit_orders:
+        print "CHECKING VISIT ORDER: %s" % neighbor_visit_order
         if neighbor_visit_order != len(neighbors):
             continue
 
-        print neighbor_visit_order
+        print "EXAMING VISIT ORDER: %s" % neighbor_visit_order
         minExpWalk_order = totExpWalk
-        totTime_order = tAccum
+        totTime_order = tHere
         for n in neighbor_visit_order:
-            minWalk = None
-            t = None
-            if previousNode == None:
-                (minWalk, t) = subTreeMinWalk(g, currentNode, n, minExpWalk_order, totTime_order)
-            else:
-                dt = g[previousNode][currentNode]['weight']
-                (minWalk, t) = subTreeMinWalk(g,currentNode, n, 
-                                              minExpWalk_order + (totTime_order + dt)*g.node[currentNode]['p'], 
-                                              totTime_order + dt) 
-            minExpWalk_order += minWalk
-            totTime_order += t
+	    (minExpWalk, resultT) = subTreeMinWalk(g,currentNode, n, totTime_order) 
+	    minExpWalk_order += minExpWalk
+	    #we should only add this if its not part of the longest
+	    #path through the subtree
+            totTime_order = resultT
 
         #keep track of the best
         if minExpWalk_order < minMinExpWalk:
@@ -260,7 +260,10 @@ def subTreeMinWalk(g, previousNode, currentNode, totExpWalk, tAccum):
             minVisitOrder = neighbor_visit_order
         
     print "MIN VISIT ORDER: %s" % minVisitOrder
-    return (minMinExpWalk, minTimeElapsed)
+    #now account for the walk from the previous node to this node
+    dExpWalk = tHere*g.node[currentNode]['p']
+    #dt = minTimeElapsed - tHere (change in time from traversing this subtree)
+    return (dExpWalk + minMinExpWalk, minTimeElapsed)
 
 
 
@@ -345,7 +348,10 @@ def main():
         #C = None
         
         (walk, walkTime) = calcMinWalk(startNode, C)#nodeset, edgeset)
-        if walkTime < minWalkTime:
+        print "MIN EXP WALK: %s" % walk
+	print "WALK TIME:    %s" % walkTime
+	
+	if walkTime < minWalkTime:
             minWalk = walk
             minGraph = C
             minWalkTime = walkTime
