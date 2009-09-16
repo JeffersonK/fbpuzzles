@@ -1,8 +1,19 @@
-import sys
-import os
-from pprint import *
-import copy
+#DEBUG SWITCHES
+WITH_MATPLOT = 1
+WITH_NETWORKX = 1
+DEBUG = 1
 
+#GLOBALS
+INF = 1e9
+
+from pprint import *
+import sys
+import path as pathalgs
+import graph as nx
+
+if WITH_MATPLOT and WITH_NETWORKX:
+	import matplotlib.pyplot as plt
+	import networkx
 #
 #
 #
@@ -35,283 +46,14 @@ def safe_readline(fileObj):
 	except:
 		return (-1, None)
 
-class Graph:
-	
-	INF = 10e6
-	
-	#
-	#
-	#
-	def __init__(self, vertexList=[], edgeList=[]):
-
-		#Keep this around for debugging
-		self.__vertexList = vertexList
-		self.__edgeList = edgeList
-
-		#["vertex id", ....]
-		self.__vertices = {}
-		for node in vertexList:
-			self.__vertices[str(node)] = 1
-		
-		#[(nodeA,nodeB,weight)
-		self.__edges = {}
-		for (nodeA,nodeB,weight) in edgeList:
-			exists = True
-			if nodeA not in self.__vertexList:
-				exists = False
-				print "vertex %s doesn't exist" % nodeA
-			if nodeB not in self.__vertexList:
-				exists = False
-				print "vertex %s doesn't exist" % nodeB
-			
-			if type(weight) != type(1):
-				exists = False
-				print "weight type:%s is not an integer." % type(weight)
-			
-			if exists:	
-				self.__edges[(nodeA,nodeB)] = weight
-
-
-	#
-	#
-	#
-	def __str__(self):
-		#pprint(self.__edges)
-		return "{'vertices':%s,'edges':%s}" % (self.__vertices,
-						       self.__edges)
-
-
-
-	#0. Use Floyd-Warshall to generate all-pairs shortest paths
-	#0.5) create a list L of all nodes in the graph
-	#1. Pick the shortest path P between 2 nodes that incorporates the most nodes
-	#   in (not necessarily the longest path) and add it to the current walk W
-	#1.5) remove all nodes in P from L
-	#2. choose in L (aka not on the current walk) and find the shortest path 
-	#   between a node on the current walk and that node
-	#3. add this branch to the current walk (need to account for the walk out and back)
-        #   Note that this provably can't create a cycle otherwise this node
-	#   would have already been on the path (assume no negative weights)
-	#4. goto 2. until all nodes have been used.
-	#
-
-	def floyd_warshall(self):
-		import networkx as NX
-		g = NX.Graph()
-		i = 0
-		paths = {}
-		for v in self.__vertices.keys():
-			g.add_node(i,name=v)
-			i += 1
-			paths[v] = {}
-			for y in self.__vertices.keys():
-				paths[v][y] = -1
-		
-		print g
-
-
-
-	#
-	#
-	#
-	def numEdges(self):
-		return len(self.__edges)
-
-	#
-	#
-	#
-	def numVertices(self):
-		return len(self.__vertices)
-
-	#
-	#
-	#
-	def vertexExist(self, vertexID):
-		if vertexID in self.__vertices:
-			return True
-		return False
-	#
-	#
-	#
-	def edgeExist(self, a, b):
-		if (a,b) in self.__edges:
-			return True
-		return False
-	
-	#
-	#
-	#
-	def addVertex(self, vertexID):
-		if type(vertexID) != type(""):
-			print "vertexID:%s is not a string identifier" % vertexID
-			return -1
-
-		if self.vertexExist(vertexID):
-			print "vertex: %s already in graph." % vertexID
-			return -2
-
-		self.__vertices[vertexID] = 1
-		return 0
-
-
-	#
-	#
-	#
-	def addEdge(self, A, B, weight):
-		exists = True
-		if A not in self.__vertices:
-			exists = False
-			print "vertex %s doesn't exist" % A
-
-		if B not in self.__vertices:
-			exists = False
-			print "vertex %s doesn't exist" % B
-			
-		if type(weight) != type(1):
-			exists = False
-			print "weight type:%s is not an integer." % type(weight)
-			
-		if exists:	
-			self.__edges[(A,B)] = weight
-			return 0
-		
-		return -1
-	
-	#
-	#
-	#
-	def listVertices(self):
-		return self.__vertices.keys()
-
-	#
-	#
-	#
-	def listEdges(self):
-		return self.__edges.keys()
-
-	#
-	#
-	#
-	def getAdjacent(self, vertexID):
-		if not self.vertexExist(vertexID):
-			return None
-		
-		adj = []
-		for (A,B) in self.__edges.iterkeys():
-			if A == vertexID:
-				adj.append((B,self.__edges[(A,B)]))
-
-		return adj
-	#
-	#
-	#
-	def minDist(self, A, B, accum, minDist):
-		#get L list of adjacent nodes to A
-		L = self.getAdjacent(A)
-		newMin = accum
-		#if B is in L and dist(A,B) < 
-		
-		#
-		return
-
-
-	#
-	#
-	#
-	def _min(self, d, Q):
-		min = self.INF
-		minv = None
-		for v in d.iterkeys():
-			if d[v][0] < min and v in Q:
-				min = d[v][0]
-				minv = v
-
-		return (minv, min)
-
-	def dijkstra(self, source):
-		g = {}
-		for v in self.__vertices.iterkeys():
-			#(distance, previous)
-			if source == v:
-				g[v] = (0, None)
-			else:
-				g[v] = (self.INF, None)
-		
-		L = copy.deepcopy(g)
-		Q = self.listVertices()
-		#print Q
-		while len(Q) > 0:
-			u, dist = self._min(g,Q)
-			#print u, dist
-			if dist == self.INF:
-				break
-			#print "Q(%d) = %s" % (len(L),L)
-			Q.remove(u)
-			neighbors = self.getAdjacent(u)
-			#print neighbors
-			for v,w in neighbors:
-				if v in Q: #hasn't been removed yet
-					alt = dist + self.__edges[(u,v)]
-					if alt < g[v][0]:
-						g[v] = (alt, u)
-		
-		#print g
-		return g
-
-	#
-	#
-	#
-	def bellman_ford(self, source):
-		g = {}
-		L = self.listVertices
-		for v in self.__vertices.iterkeys():
-			distance = None
-			predecessor = None
-			if v == source:
-				distance = 0
-			else:
-				distance = self.INF
-			g[v] = (distance, predecessor)
-
-		for i in range(len(self.__vertices)):
-			for uv in self.__edges.iterkeys():
-				#print uv
-				u = uv[0]
-				v = uv[1]
-				weight = self.__edges[(u,v)]
-				if g[u][0] + weight < g[v][0]:
-					g[v] = (g[u][0] + weight, g[v][1])
-					g[v] = (g[v][0], u)
-
-
-		#pprint(g)
-		return g
-
-
-
-	#
-	#
-	#
-	def isconnected(self):
-		#just pick forst vertex in list as
-		#starting poit if its connected it doesn't
-		#matter
-		source = self.__vertices.keys()[0]
-		g = self.dijkstra(source)
-		for (dst,(l,src)) in g.iteritems():
-			if l == self.INF:
-				#print "%s not reachable" % dst
-				return False
-
-		return True
 
 #
 #
 #
 def loadfile(filename):
 	file = None
-	prLocs = {} #dictionary to hold probabilities
-	g = Graph()
+	#prLocs = {} #dictionary to hold probabilities
+	g = nx.Graph()
 
 	try:
 		file = open(filename, 'r')
@@ -327,12 +69,9 @@ def loadfile(filename):
 			print "File Format Error: Integer Expected"
 			sys.exit(-1)
 			
-
 	startLoc = None
 	for i in range(num_search_locs):
 		(linelen, line) = safe_readline(file)
-		
-
 		toks = line.split()
 		if len(toks) != 2:
 			print "File Format Error: 2 tokens expected"
@@ -347,13 +86,10 @@ def loadfile(filename):
 			print "File Format Error: Float Expected"
 			sys.exit(-1)
 			
-		prLocs[toks[0]] = pr
-		g.addVertex(toks[0])
+                g.add_node(toks[0], p=pr)
+
 	#	
 	#now parse the nodes in the graph
-	#gEdges = {}
-
-
 	(linelen, line) = safe_readline(file)
 	num_edges = safe_toInt(line)
 	if num_edges == None:
@@ -374,105 +110,321 @@ def loadfile(filename):
 			print "File Format Error: Integer Expected"
 			sys.exit(-1)
 
-		#gEdges[(toks[0],toks[1])] = secs
-		
-		#g.addVertex(toks[0])
-		#g.addVertex(toks[1])
-		g.addEdge(toks[0],toks[1], secs)
-		g.addEdge(toks[1],toks[0], secs)
+		g.add_edge(toks[0],toks[1], {'weight':secs})
 
-	
 	file.close()
+	return (startLoc, g)
 
-	return (startLoc, prLocs, g)#gEdges)
-###########
 #
 #
 #
-###########
+def perm(items, n=None):
+    if n is None:
+        n = len(items)
+    for i in range(len(items)):
+        v = items[i:i+1]
+        if n == 1:
+            yield v
+        else:
+            rest = items[:i] + items[i+1:]
+            for p in perm(rest, n-1):
+                yield v + p
+
+#
+#
+#
+def comb(items, n=None):
+    if n is None:
+        n = len(items)
+    for i in range(len(items)):
+        v = items[i:i+1]
+        if n == 1:
+            yield v
+        else:
+            rest = items[i+1:]
+            for c in comb(rest, n-1):
+                yield v + c
+
+
+#if there are no cycles in a graph 
+#then there is no edge you can delete
+#where the graph is still connected
+#can prove by contradiction trivially
+def is_connected(Graph):
+
+    nodes = Graph.nodes()
+    path = pathalgs.single_source_dijkstra_path(Graph, nodes[0])
+
+    if len(nodes) != len(path.keys()):
+        return False
+
+    return True
+
+#
+#
+#
+def ConnectedAndNoCycle(Graph):
+
+    if not is_connected(Graph):
+        return False
+
+    edges = Graph.edges(data=True)
+    for edge in edges:
+        Graph.remove_edge(edge[0],edge[1])
+        if is_connected(Graph):
+            #must have a cycle
+            return False
+        else:
+            #put the edge back in
+            Graph.add_edge(edge[0],edge[1],edge[2])
+
+    #if we get through all the edges
+    #and there is no edge we can delete
+    #where the graph stays connected if we delete it
+    #there is no cycle
+    return True
+
+def generate_all_spanning_trees(G):
+
+    #edgelist = G.edges(data=True)
+    #print edgelist
+    nodelist = G.nodes()
+    C = G.copy()
+    items = C.edges(data=True)
+    #print items
+    l = [[x for (pos,x) in zip(range(len(items)), items) if (2**pos) & switches] for switches in range(2**len(items))]
+    
+    C = None
+    SpanningTrees = []
+    for edgeset in l:
+        
+        #print edgeset
+        if len(edgeset) == 0:
+            #skip the empty set
+            continue
+        
+        C = nx.Graph()
+        C.add_nodes_from(nodelist)
+        C.add_edges_from(edgeset)
+        if ConnectedAndNoCycle(C):
+            #print "Spanning Tree: %s" % C.edges()
+            SpanningTrees.append(edgeset)
+            
+        C = None
+
+    return SpanningTrees
+
+
+#
+#
+#
+def calcMinWalk(startNode, g):#nodeset, edgeset):
+
+    (minExpWalkTime, tTot, pathAccum) = subTreeMinWalk(g, None, startNode, 0)
+    return (minExpWalkTime, tTot, pathAccum)
+
+
+#g is a graph with no cycles becaues it is a
+#spanning tree
+#return (minExpWalk, totTimeExlapsed)
+def subTreeMinWalk(g, previousNode, currentNode, tAccum):
+    if DEBUG:
+	    print "\tPREVIOUS NODE: %s" % previousNode
+	    print "\tCURRENT NODE:  %s" % currentNode
+    
+    neighbors = g.neighbors(currentNode)
+    if previousNode != None and previousNode in neighbors:
+	    neighbors.remove(previousNode)
+
+    if DEBUG:
+	    print "\tNEIGHBORS: %s" % neighbors
+
+    #we are at a leaf node
+    if len(neighbors) == 0:
+        dt = g[previousNode][currentNode]['weight']
+        min = (tAccum + dt)*g.node[currentNode]['p']
+	if DEBUG:
+		print "\tAT LEAF: return(%s, %s)" % (min, tAccum+2*dt)
+        return (min, tAccum+2*dt, [currentNode])
+
+    #there is only one choice of path
+    if len(neighbors) == 1:
+        dtHere = 0.0
+	if previousNode == None:
+		dtHere = 0.0
+	else:
+		dtHere = g[previousNode][currentNode]['weight']
+
+	tHere = tAccum + dtHere
+	(minExpWalk, tTot, pathAccum) = subTreeMinWalk(g, currentNode, neighbors[0], tHere)
+	    
+        #send same values back but account for traversing this edge again
+        return (minExpWalk + (tHere*g.node[currentNode]['p']), 
+		tTot + dtHere, 
+		[currentNode] + pathAccum)
+
+    #generate a list of all possible sequences to visit neighbors.
+    #should only generate lists of length len(neighbors)
+    neighbors_visit_orders = perm(neighbors)
+    
+    minMinExpWalk = INF
+    minTimeElapsed = None
+    minVisitOrder = []
+    minPath = None
+    dtHere = 0.0
+    if previousNode == None:
+	    dtHere = 0.0
+    else:
+	    dtHere = g[previousNode][currentNode]['weight'] 
+
+    tHere = tAccum + dtHere
+    for neighbor_visit_order in neighbors_visit_orders:
+        if len(neighbor_visit_order) != len(neighbors):
+            #shouldn't hit this case but in case
+            if DEBUG:
+		    print "\tSKIPPING VISIT ORDER: %s" % neighbor_visit_order
+            continue
+
+	if DEBUG:
+		print "\tEXAMINING VISIT ORDER: %s" % neighbor_visit_order
+        minExpWalk_order = 0.0
+        totTime_order = tHere
+	pathAccum = []
+	i = 1
+        for n in neighbor_visit_order:
+	    (minExpWalk, resultT, path) = subTreeMinWalk(g,currentNode, n, totTime_order) 
+	    minExpWalk_order += minExpWalk
+            totTime_order = resultT# + tHere
+	    pathAccum += path
+	    
+	    #account for the fact that we have to come back through
+	    #this subtree if its not the last subtree in the optimal
+	    #walk of the spanning tree
+	    if i < len(neighbor_visit_order):
+		    path.reverse()
+		    pathAccum += path[1:] + [currentNode]
+	    i += 1
+
+	if DEBUG:
+		print "\t\tVIST ORDER RESULT: (%s, %s)" % (minExpWalk_order, totTime_order)
+        #keep track of the best
+        if minExpWalk_order < minMinExpWalk:
+            minMinExpWalk = minExpWalk_order
+            minTimeElapsed = totTime_order
+            minVisitOrder = neighbor_visit_order
+	    minPath = pathAccum
+	if DEBUG:
+	    print "\t\tMIN VISIT ORDER: %s" % minVisitOrder
+	    print "\t\tMIN PATH: %s" % minPath
+    #now account for the walk from the previous node to this node
+    dExpWalk = tHere*g.node[currentNode]['p']
+    #dt = minTimeElapsed - tHere (change in time from traversing this subtree)
+    return (dExpWalk + minMinExpWalk, minTimeElapsed + dtHere, [currentNode] + minPath)
+
+
+
+def testGraph1():
+    edges = [(1,2,{'weight':7}),
+             (2,1,{'weight':7}),
+             (1,3,{'weight':14}),
+             (3,1,{'weight':14}),
+             (1,4,{'weight':9}),
+             (4,1,{'weight':9}),
+             (2,4,{'weight':10}),
+             (4,2,{'weight':10}),
+             (2,5,{'weight':15}),
+             (5,2,{'weight':15}),                  
+             (3,4,{'weight':2}),
+             (4,3,{'weight':2}),
+             (3,6,{'weight':9}),
+             (6,3,{'weight':9}),
+             (4,5,{'weight':11}),
+             (5,4,{'weight':11}),
+             (6,5,{'weight':6}),
+             (5,6,{'weight':6}),]
+
+    G = nx.Graph()
+    G.add_edges_from(edges)
+    return G
+#
+#
+#
 def main():
-	startLoc, prLocs, graph = loadfile(sys.argv[1])
+
+    #G = testGraph1()
+    startNode, G = loadfile(sys.argv[1])
+
+    #pprint(G.nodes(data=True))
+    #pprint(G.edges(data=True))
+    
+    if WITH_NETWORKX:
+	    networkx.draw(G)
+    
+    if not is_connected(G):
+        #not gauranteed to find her
+        print "-1.00\n"
+        return
+
+    nodeset = G.nodes()
+
+    SpanningTrees = generate_all_spanning_trees(G)
+
+    #Vars to track Global Minimums
+    minTree = None
+    minWalkTime = INF
+    minExpWalkTime = INF
+    minPath = None
+    minGraph = None
+    ith_spanningtree = None
+    i=0
+    for edgeset in SpanningTrees:
+        C = nx.Graph()
+        C.add_edges_from(edgeset)
+        C.add_nodes_from(nodeset)
+
+        for n in nodeset:
+            C.node[n]['p'] = G.node[n]['p']
+   
+	if WITH_NETWORKX:
+		networkx.draw(C)
 	
-	
-	#DEBUG PRINT
-	pprint(startLoc)
-	pprint(prLocs)
-	#pprint(gEdges)
-	print graph
-	#print graph.numVertices()
-	#print graph.numEdges()
-	#print graph.getAdjacent("behind_blinds")
+	if WITH_MATPLOT:
+		plt.savefig("SpanningTree-%d.png"%i)
+		plt.close()
 
-	print "BELLMAN-FORD"
-	print graph.bellman_ford(startLoc)
+	if DEBUG:
+		print "\nTRYING SPANNING TREE-%d: %s" % (i, C.edges(data=True))
+	(expWalkTime, walkTime, path) = calcMinWalk(startNode, C)#nodeset, edgeset)
 
-	print "DIJKSTRA"
-	print graph.dijkstra(startLoc)
+	if DEBUG:
+		print "MIN EXP WALK: %s" % expWalkTime
+		print "WALK TIME:    %s" % walkTime
+		print "MIN PATH:     %s" % path
 
-	#check to make sure all vertices are reachable
-	#aka the graph is connected
-	if not graph.isconnected():
-		print "-1.00"
+	if expWalkTime < minExpWalkTime:
+            minExpWalkTime = expWalkTime
+            minGraph = C
+            minWalkTime = walkTime
+	    minPath = path
+	    ith_spanningtree = i
+	#help out the python garbage collector
+	C = None
+	i += 1
 
-	#sys.setrecursionlimit(10000)
-	#print graph.allwalks([startLoc], 0)
-	graph.floyd_warshall()
+    if DEBUG:
+	    print
+	    print "*** RESULT ***"
+	    print "SPANNING TREE (%d)" % ith_spanningtree
+	    print "MIN EXP WALK TIME: %.2f" % minExpWalkTime
+	    print "MIN WALK TIME:     %.2f" % minWalkTime
+	    print "MIN PATH:          %s" % minPath
+	    print "EDGE SET:          %s" % minGraph.edges(data=True)
+	    print
+        
+    print "%.2f\n" % minExpWalkTime
+    return #END MAIN
+
+
 
 if __name__ == "__main__":
-	main()
-
-
-
-
-
-#NP HARD SO JUST STOP
-	#currentwalk is a list of nodes we have visited previously to node
-        #walklen is the length of the walk thus far 
-	def allwalks(self, currentwalk, walklen):
-		print "currentwalk: %s" % currentwalk
-	#if all nodes are in currentwalk
-	#we are done with this walk
-	#print currentwalk, walklen
-	#return [(currentwalk, walklen)]
-		c = set(currentwalk)
-		t = set(self.__vertices.keys())
-		#print t
-		#print c
-		x = len(t) - len(c)
-		if x == 0:
-			print "%s => %d" % (currentwalk, walklen)
-			return (currentwalk, walklen)
-
-		else:
-	#for each edge attached to this node call
-			edges = []
-			for (a,b) in self.__edges.iterkeys():
-				if currentwalk[-1] == a:
-				#store the edge and the weight
-					edges += [(a,b,self.__edges[(a,b)])]
-
-			minwalk = []
-			minlen = self.INF
-			print "edges: %s" % edges
-			for (a,b,l) in edges:
-			
-	#CHECK TO AVOID PING-PONG-ING	
-        #if we are at node x and can go to node n and the 
-	#last three nodes visited look like x,n,x skip n
-				if len(currentwalk) > 2 and \
-					    currentwalk[-3] == a and \
-					    currentwalk[-2] == b and \
-					    currentwalk[-1] == a:
-					pass
-				else:			
-	#else: make the recursive call
-	#allwalks(currentwalk+nextvertex, walklen+nextlen,
-					(walk, length) = self.allwalks(currentwalk+[b], walklen+l)
-					if length < minlen:
-						minlen = length
-						minwalk = walk
-
-	#make a list of the returned results and return it
-			print "minwalk: %s minlen: %d" % (minwalk, minlen)
-			return (minwalk, minlen)
-	
+    main()
