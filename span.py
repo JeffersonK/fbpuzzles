@@ -1,10 +1,19 @@
+#DEBUG SWITCHES
+WITH_MATPLOT = 0
+WITH_NETWORKX = 0
+DEBUG = 1
+
+#GLOBALS
+INF = 1e9
+
 from pprint import *
 import sys
 import path as pathalgs
 import graph as nx
 import perm
-import matplotlib.pyplot as plt
-import networkx
+if WITH_MATPLOT and WITH_NETWORKX:
+	import matplotlib.pyplot as plt
+	import networkx
 #
 #
 #
@@ -186,20 +195,23 @@ def calcMinWalk(startNode, g):#nodeset, edgeset):
 #spanning tree
 #return (minExpWalk, totTimeExlapsed)
 def subTreeMinWalk(g, previousNode, currentNode, tAccum):
-    print "\tPREVIOUS NODE: %s" % previousNode
-    print "\tCURRENT NODE:  %s" % currentNode
+    if DEBUG:
+	    print "\tPREVIOUS NODE: %s" % previousNode
+	    print "\tCURRENT NODE:  %s" % currentNode
     
     neighbors = g.neighbors(currentNode)
     if previousNode != None and previousNode in neighbors:
 	    neighbors.remove(previousNode)
 
-    print "\tNEIGHBORS: %s" % neighbors
+    if DEBUG:
+	    print "\tNEIGHBORS: %s" % neighbors
 
     #we are at a leaf node
     if len(neighbors) == 0:
         dt = g[previousNode][currentNode]['weight']
         min = (tAccum + dt)*g.node[currentNode]['p']
-	print "AT LEAF: return(%s, %s)" % (min, tAccum+2*dt)
+	if DEBUG:
+		print "\tAT LEAF: return(%s, %s)" % (min, tAccum+2*dt)
         return (min, tAccum+2*dt, [currentNode])
 
     #there is only one choice of path
@@ -222,12 +234,10 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
     #should only generate lists of length len(neighbors)
     neighbors_visit_orders = perm.perm(neighbors)
     
-    #print "ENUMERATION OF VISIT ORDERS: %s" % neighbors_visit_orders
-    minMinExpWalk = 1e9
+    minMinExpWalk = INF
     minTimeElapsed = None
     minVisitOrder = []
     minPath = None
-
     dtHere = 0.0
     if previousNode == None:
 	    dtHere = 0.0
@@ -235,32 +245,43 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
 	    dtHere = g[previousNode][currentNode]['weight'] 
 
     tHere = tAccum + dtHere
-
     for neighbor_visit_order in neighbors_visit_orders:
         if len(neighbor_visit_order) != len(neighbors):
-            print "\tSKIPPING VISIT ORDER: %s" % neighbor_visit_order
+            #shouldn't hit this case but in case
+            if DEBUG:
+		    print "\tSKIPPING VISIT ORDER: %s" % neighbor_visit_order
             continue
 
-        print "\tEXAMINING VISIT ORDER: %s" % neighbor_visit_order
+	if DEBUG:
+		print "\tEXAMINING VISIT ORDER: %s" % neighbor_visit_order
         minExpWalk_order = 0.0
         totTime_order = tHere
 	pathAccum = []
+	i = 1
         for n in neighbor_visit_order:
 	    (minExpWalk, resultT, path) = subTreeMinWalk(g,currentNode, n, totTime_order) 
 	    minExpWalk_order += minExpWalk
-	    #we should only add this if its not part of the longest
-	    #path through the subtree
             totTime_order = resultT + (resultT - totTime_order)
 	    pathAccum += path
-	print "\t\tVIST ORDER RESULT: (%s, %s)" % (minExpWalk_order, totTime_order)
+	    
+	    #account for the fact that we have to come back through
+	    #this subtree if its not the last subtree in the optimal
+	    #walk of the spanning tree
+	    if i < len(neighbor_visit_order):
+		    pathAccum += [currentNode]
+	    i += 1
+
+	if DEBUG:
+		print "\t\tVIST ORDER RESULT: (%s, %s)" % (minExpWalk_order, totTime_order)
         #keep track of the best
         if minExpWalk_order < minMinExpWalk:
             minMinExpWalk = minExpWalk_order
             minTimeElapsed = totTime_order
             minVisitOrder = neighbor_visit_order
 	    minPath = pathAccum
-    print "\t\tMIN VISIT ORDER: %s" % minVisitOrder
-    print "\t\tMIN PATH: %s" % minPath
+    if DEBUG:
+	    print "\t\tMIN VISIT ORDER: %s" % minVisitOrder
+	    print "\t\tMIN PATH: %s" % minPath
     #now account for the walk from the previous node to this node
     dExpWalk = tHere*g.node[currentNode]['p']
     #dt = minTimeElapsed - tHere (change in time from traversing this subtree)
@@ -299,25 +320,14 @@ def main():
     #G = testGraph1()
     startNode, G = loadfile(sys.argv[1])
 
-    pprint(G.nodes(data=True))
-    pprint(G.edges(data=True))
-    networkx.draw(G)
+    #pprint(G.nodes(data=True))
+    #pprint(G.edges(data=True))
     
-    #pos = {}
-    #labels = {}
-    #i = 1
-    #for n in G.nodes():
-    #    pos[n] = (i, i)
-    #    labels[n] = G.node[n]['p']
-    #    i += 1
-    #networkx.draw_networkx_labels(G, pos, labels)
-
-    #plt.savefig("C.png")
-    #plt.show()
-    #plt.close()
-
+    if WITH_NETWORKX:
+	    networkx.draw(G)
+    
     if not is_connected(G):
-        #not garaunteed to find her
+        #not gauranteed to find her
         print "-1.00"
         return
 
@@ -325,11 +335,10 @@ def main():
 
     SpanningTrees = generate_all_spanning_trees(G)
 
-
-    #Global Minimums
+    #Vars to track Global Minimums
     minTree = None
-    minWalkTime = 1e9 #INF
-    minExpWalkTime = 1e9
+    minWalkTime = INF
+    minExpWalkTime = INF
     minPath = None
     minGraph = None
     ith_spanningtree = None
@@ -342,16 +351,22 @@ def main():
         for n in nodeset:
             C.node[n]['p'] = G.node[n]['p']
    
-        networkx.draw(C)
-        plt.savefig("SpanningTree-%d.png"%i)
-        #plt.show()
-        plt.close()
-        #plt.clr()
-	print "\nTRYING SPANNING TREE-%d: %s" % (i, C.edges(data=True))
+	if WITH_NETWORKX:
+		networkx.draw(C)
+	
+	if WITH_MATPLOT:
+		plt.savefig("SpanningTree-%d.png"%i)
+		plt.close()
+
+	if DEBUG:
+		print "\nTRYING SPANNING TREE-%d: %s" % (i, C.edges(data=True))
 	(expWalkTime, walkTime, path) = calcMinWalk(startNode, C)#nodeset, edgeset)
-        print "MIN EXP WALK: %s" % expWalkTime
-	print "WALK TIME:    %s" % walkTime
-	print "MIN PATH:     %s" % path
+
+	if DEBUG:
+		print "MIN EXP WALK: %s" % expWalkTime
+		print "WALK TIME:    %s" % walkTime
+		print "MIN PATH:     %s" % path
+
 	if expWalkTime < minExpWalkTime:
             minExpWalkTime = expWalkTime
             minGraph = C
@@ -361,15 +376,18 @@ def main():
 	#help out the python garbage collector
 	C = None
 	i += 1
-    print
-    print "*** RESULT ***"
-    print "SPANNING TREE (%d)" % ith_spanningtree
-    print "MIN EXP WALK TIME: %.2f" % minExpWalkTime
-    print "MIN WALK TIME:     %.2f" % minWalkTime
-    print "MIN PATH:          %s" % minPath
-    print "EDGE SET:          %s" % minGraph.edges(data=True)
-    print
+
+    if DEBUG:
+	    print
+	    print "*** RESULT ***"
+	    print "SPANNING TREE (%d)" % ith_spanningtree
+	    print "MIN EXP WALK TIME: %.2f" % minExpWalkTime
+	    print "MIN WALK TIME:     %.2f" % minWalkTime
+	    print "MIN PATH:          %s" % minPath
+	    print "EDGE SET:          %s" % minGraph.edges(data=True)
+	    print
         
+    print "%.2f" % minExpWalkTime
     return #END MAIN
 
 
