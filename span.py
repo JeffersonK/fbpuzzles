@@ -195,13 +195,15 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
     neighbors = g.neighbors(currentNode)
     if previousNode != None and previousNode in neighbors:
 	    neighbors.remove(previousNode)
+
     print "NEIGHBORS: %s" % neighbors
 
     #we are at a leaf node
     if len(neighbors) == 0:
         dt = g[previousNode][currentNode]['weight']
         min = (tAccum + dt)*g.node[currentNode]['p']
-        return (min, tAccum+dt)
+	print "AT LEAF: return(%s, %s)" % (min, tAccum+2*dt)
+        return (min, tAccum+2*dt)
 
     #there is only one choice of path
     if len(neighbors) == 1:
@@ -215,13 +217,10 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
 	(minExpWalk, tTot) = subTreeMinWalk(g, currentNode, neighbors[0], tHere)
 	    
         #send same values back but account for traversing this edge again
-        return (minExpWalk + (tHere*g.node[currentNode]['p']), tHere)
+        return (minExpWalk + (tHere*g.node[currentNode]['p']), tHere + 2*dtHere)
 
     #generate a list of all possible sequences to visit neighbors.
-    #items = neighbors
-    print "NEIGHBORS: %s" % neighbors
     #should only generate lists of length len(neighbors)
-    #neighbors_visit_orders = [[x for (pos,x) in zip(range(len(items)), items) if (2**pos) & switches] for switches in range(2**len(items))]
     neighbors_visit_orders = perm.perm(neighbors)
     
     #print "ENUMERATION OF VISIT ORDERS: %s" % neighbors_visit_orders
@@ -239,20 +238,21 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
     tHere = tAccum + dtHere
 
     for neighbor_visit_order in neighbors_visit_orders:
-        print "CHECKING VISIT ORDER: %s" % neighbor_visit_order
-        if neighbor_visit_order != len(neighbors):
+        if len(neighbor_visit_order) != len(neighbors):
+            print "SKIPPING VISIT ORDER: %s" % neighbor_visit_order
             continue
 
-        print "EXAMING VISIT ORDER: %s" % neighbor_visit_order
-        minExpWalk_order = totExpWalk
+        print "EXAMINING VISIT ORDER: %s" % neighbor_visit_order
+        minExpWalk_order = 0.0
         totTime_order = tHere
         for n in neighbor_visit_order:
 	    (minExpWalk, resultT) = subTreeMinWalk(g,currentNode, n, totTime_order) 
 	    minExpWalk_order += minExpWalk
 	    #we should only add this if its not part of the longest
 	    #path through the subtree
-            totTime_order = resultT
+            totTime_order = resultT + (resultT - totTime_order)
 
+	print "\tVIST ORDER RESULT: (%s, %s)" % (minExpWalk_order, totTime_order)
         #keep track of the best
         if minExpWalk_order < minMinExpWalk:
             minMinExpWalk = minExpWalk_order
@@ -263,7 +263,7 @@ def subTreeMinWalk(g, previousNode, currentNode, tAccum):
     #now account for the walk from the previous node to this node
     dExpWalk = tHere*g.node[currentNode]['p']
     #dt = minTimeElapsed - tHere (change in time from traversing this subtree)
-    return (dExpWalk + minMinExpWalk, minTimeElapsed)
+    return (dExpWalk + minMinExpWalk, minTimeElapsed + 2*dtHere)
 
 
 
