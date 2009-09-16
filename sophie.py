@@ -6,7 +6,7 @@ DEBUG = 1
 #GLOBALS
 INF = 1e9
 
-from pprint import *
+#from pprint import *
 import sys
 import path as pathalgs
 import graph as nx
