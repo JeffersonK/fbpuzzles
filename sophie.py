@@ -1,14 +1,16 @@
+#!/usr/bin/python
+
 #DEBUG SWITCHES
-WITH_MATPLOT = 1
-WITH_NETWORKX = 1
-DEBUG = 1
+WITH_MATPLOT = 0
+WITH_NETWORKX = 0
+DEBUG = 0
 
 #GLOBALS
 INF = 1e9
 
 #from pprint import *
 import sys
-import path as pathalgs
+#import path as pathalgs
 import graph as nx
 
 if WITH_MATPLOT and WITH_NETWORKX:
@@ -145,6 +147,96 @@ def comb(items, n=None):
             for c in comb(rest, n-1):
                 yield v + c
 
+import heapq
+def single_source_dijkstra(G,source,target=None,cutoff=None ):
+    """Returns shortest paths and lengths in a weighted graph G.
+
+    Uses Dijkstra's algorithm for shortest paths. 
+    Returns a tuple of two dictionaries keyed by node.
+    The first dicdtionary stores distance from the source.
+    The second stores the path from the source to that node.
+
+    Parameters
+    ----------
+    G : NetworkX graph
+
+    source : node label
+       Starting node for path
+
+    target : node label, optional
+       Ending node for path 
+
+    cutoff : integer or float, optional
+        Depth to stop the search - only
+        paths of length <= cutoff are returned.
+
+
+    Examples
+    --------
+    >>> G=nx.path_graph(5)
+    >>> length,path=nx.single_source_dijkstra(G,0)
+    >>> print length[4]
+    4
+    >>> print length
+    {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}
+    >>> path[4]
+    [0, 1, 2, 3, 4]
+
+    Notes
+    ---------
+    Distances are calculated as sums of weighted edges traversed.
+    Edges must hold numerical values for Graph and DiGraphs.
+
+    Based on the Python cookbook recipe (119466) at 
+    http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/119466
+
+    This algorithm is not guaranteed to work if edge weights
+    are negative or are floating point numbers
+    (overflows and roundoff errors can cause problems). 
+    
+    See Also
+    --------
+    single_source_dijkstra_path()
+    single_source_dijkstra_path_length()
+    
+    """
+    if source==target: return (0, [source])
+    dist = {}  # dictionary of final distances
+    paths = {source:[source]}  # dictionary of paths
+    seen = {source:0} 
+    fringe=[] # use heapq with (distance,label) tuples 
+    heapq.heappush(fringe,(0,source))
+    while fringe:
+        (d,v)=heapq.heappop(fringe)
+        if v in dist: continue # already searched this node.
+        dist[v] = d
+        if v == target: break
+        #for ignore,w,edgedata in G.edges_iter(v,data=True):
+        #is about 30% slower than the following
+        if G.is_multigraph():
+            edata=[]
+            for w,keydata in G[v].items():
+                edata.append((w,
+                             {'weight':min((dd.get('weight',1)
+                                            for k,dd in keydata.iteritems()))}))
+        else:
+            edata=G[v].iteritems()
+
+
+        for w,edgedata in edata:
+            vw_dist = dist[v] + edgedata.get('weight',1)
+            if cutoff is not None:
+                if vw_dist>cutoff: 
+                    continue
+            if w in dist:
+                if vw_dist < dist[w]:
+                    raise ValueError,\
+                          "Contradictory paths found: negative weights?"
+            elif w not in seen or vw_dist < seen[w]:
+                seen[w] = vw_dist
+                heapq.heappush(fringe,(vw_dist,w))
+                paths[w] = paths[v]+[w]
+    return (dist,paths)
 
 #if there are no cycles in a graph 
 #then there is no edge you can delete
@@ -153,7 +245,8 @@ def comb(items, n=None):
 def is_connected(Graph):
 
     nodes = Graph.nodes()
-    path = pathalgs.single_source_dijkstra_path(Graph, nodes[0])
+    #path = pathalgs.single_source_dijkstra_path(Graph, nodes[0])
+    length, path = single_source_dijkstra(Graph, nodes[0])
 
     if len(nodes) != len(path.keys()):
         return False

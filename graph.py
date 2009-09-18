@@ -21,8 +21,8 @@ __author__ = """\n""".join(['Aric Hagberg (hagberg@lanl.gov)',
 #
 __docformat__ = "restructuredtext en"
 
-from networkx.exception import NetworkXException, NetworkXError
-import networkx.convert as convert
+#from networkx.exception import NetworkXException, NetworkXError
+#import networkx.convert as convert
 from copy import deepcopy
 
 class Graph(object):
@@ -371,8 +371,9 @@ class Graph(object):
             try:
                 attr_dict.update(attr)
             except AttributeError:
-                raise NetworkXError(\
-                    "The attr_dict argument must be a dictionary.")
+                #raise NetworkXError(\
+                #   "The attr_dict argument must be a dictionary.")
+				raise RuntimeError, "The attr_dict argument must be a dictionary."
         if n not in self.adj:
             self.adj[n] = {}
             self.node[n] = attr_dict
@@ -453,7 +454,9 @@ class Graph(object):
             nbrs = adj[n].keys() # keys handles self-loops (allow mutation later)
             del self.node[n]
         except KeyError: # NetworkXError if n not in self
-            raise NetworkXError("The node %s is not in the graph."%(n,))
+            #raise NetworkXError("The node %s is not in the graph."%(n,))
+			raise RuntimeError, "The node %s is not in the graph."%(n,)
+
         for u in nbrs:  
             del adj[u][n]   # remove all edges n-u in graph
         del adj[n]          # now remove node
@@ -683,8 +686,10 @@ class Graph(object):
             try:
                 attr_dict.update(attr)
             except AttributeError:
-                raise NetworkXError(\
-                    "The attr_dict argument must be a dictionary.")
+                #raise NetworkXError(\
+                #    "The attr_dict argument must be a dictionary.")
+		        raise RuntimeError, "The attr_dict argument must be a dictionary."
+
         # add nodes            
         if u not in self.adj: 
             self.adj[u] = {}
@@ -746,8 +751,10 @@ class Graph(object):
             try:
                 attr_dict.update(attr)
             except AttributeError:
-                raise NetworkXError(\
-                    "The attr_dict argument must be a dictionary.")
+                #raise NetworkXError(\
+                #    "The attr_dict argument must be a dictionary.")
+		        raise RuntimeError, "The attr_dict argument must be a dictionary."
+
         # process ebunch
         for e in ebunch:
             ne=len(e)
@@ -757,8 +764,10 @@ class Graph(object):
                 u,v = e  
                 dd = {}
             else: 
-                raise NetworkXError(\
-                    "Edge tuple %s must be a 2-tuple or 3-tuple."%(e,))
+                #raise NetworkXError(\
+                #    "Edge tuple %s must be a 2-tuple or 3-tuple."%(e,))
+                raise RuntimeError, "Edge tuple %s must be a 2-tuple or 3-tuple."%(e,)
+ 
             if u not in self.adj: 
                 self.adj[u] = {}
                 self.node[u] = {}
@@ -834,7 +843,8 @@ class Graph(object):
             if u != v:  # self-loop needs only one entry removed
                 del self.adj[v][u]   
         except KeyError: 
-            raise NetworkXError("The edge %s-%s not in graph"%(u,v))
+	        #raise NetworkXError("The edge %s-%s not in graph"%(u,v))
+			raise RuntimeError, "The edge %s-%s not in graph"%(u,v)
 
 
 
@@ -955,7 +965,8 @@ class Graph(object):
         try:
             return self.adj[n].keys()
         except KeyError:
-            raise NetworkXError("The node %s is not in the graph."%(n,))
+            #raise NetworkXError("The node %s is not in the graph."%(n,))
+			raise RuntimeError, "The node %s is not in the graph."%(n,)
 
     def neighbors_iter(self, n):
         """Return an iterator over all neighbors of node n.
@@ -977,7 +988,8 @@ class Graph(object):
         try:
             return self.adj[n].iterkeys()
         except KeyError:
-            raise NetworkXError("The node %s is not in the graph."%(n,))
+            #raise NetworkXError("The node %s is not in the graph."%(n,))
+			raise RuntimeError, "The node %s is not in the graph."%(n,)
 
     def edges(self, nbunch=None, data=False):
         """Return a list of edges.
@@ -1359,16 +1371,16 @@ class Graph(object):
         >>> H.edges()
         [(0, 1)]
         """
-        from networkx import DiGraph 
-        G=DiGraph()
-        G.name=self.name
-        G.add_nodes_from(self)
-        G.add_edges_from( ((u,v,deepcopy(data)) 
-                           for u,nbrs in self.adjacency_iter() 
-                           for v,data in nbrs.iteritems()) )
-        G.graph=deepcopy(self.graph)
-        G.node=deepcopy(self.node)
-        return G
+        #from networkx import DiGraph 
+        #G=DiGraph()
+        #G.name=self.name
+        #G.add_nodes_from(self)
+        #G.add_edges_from( ((u,v,deepcopy(data)) 
+        #                   for u,nbrs in self.adjacency_iter() 
+        #                   for v,data in nbrs.iteritems()) )
+        #G.graph=deepcopy(self.graph)
+        #G.node=deepcopy(self.node)
+        #return G
 
     def to_undirected(self):
         """Return an undirected copy of the graph. 
@@ -1765,12 +1777,16 @@ class Graph(object):
                     print message
                     # capture error for non-sequence/iterator nbunch.
                     if 'iterable' in message:  
-                        raise NetworkXError(
-                            "nbunch is not a node or a sequence of nodes.")
+                        #raise NetworkXError(
+                        #    "nbunch is not a node or a sequence of nodes.")
+                        raise RuntimeError, "nbunch is not a node or a sequence of nodes."
+
                     # capture error for unhashable node.
                     elif 'hashable' in message: 
-                        raise NetworkXError(
-                            "Node %s in the sequence nbunch is not a valid node."%n)
+                        #raise NetworkXError(
+                        #    "Node %s in the sequence nbunch is not a valid node."%n)
+                        raise RuntimeError, "Node %s in the sequence nbunch is not a valid node."%n
+
                     else: raise
             bunch=bunch_iter(nbunch,self.adj)
         return bunch
