@@ -1,16 +1,31 @@
-6
-kitchen	      .05
-front_door    .2
-in_cabinet    .3
-under_bed     .3
-behind_blinds .05
-living_room   .1
-8	      
-front_door under_bed     5
-under_bed  behind_blinds 9
-front_door in_cabinet    2
-front_door behind_blinds 5
-in_cabinet behind_blinds 6
-front_door living_room   5
-living_room kitchen	 10
-in_cabinet kitchen	 3
+10
+0 0.199125
+1 0.12035
+2 0.140044
+3 0
+4 0.21663
+5 0.0722101
+6 0.0262582
+7 0.0175055
+8 0.0678337
+9 0.140044
+18
+4 9 16
+0 1 41
+5 9 45
+6 9 12
+0 9 78
+0 5 4
+5 8 22
+5 6 22
+1 9 45
+0 4 61
+4 5 97
+1 5 60
+2 5 32
+0 2 100
+4 7 48
+6 8 92
+1 2 52
+1 6 85
+
