@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<project name="sophie" basedir="." default="jar">
+    <property name="src" value="./"/>
+    <property name="output" value="./"/>
+
+    <target name="compile" depends="create">
+        <javac destdir="./">            
+            <src path="${src}"/>            
+            <classpath refid="java"/>
+        </javac>
+    </target>
+
+    <target name="jar" depends="compile">
+      <jar destfile="sophie.jar">
+	<manifest>
+	  <attribute name="Main-Class" value="sophie"/>
+	</manifest>  
+        <fileset dir="./"/>
+      </jar>
+    </target>
+
+    <target name="clean">
+      <delete file="sophie.class"/>
+      <delete file="sophie.jar"/>
+    </target>
+    
+    <target name="create" depends="clean">
+      <mkdir dir="${output}"/>
+    </target>
+    
+    <target name="run">
+      <java jar="./sophie.jar" fork="true"/>
+    </target>
+
+    <path id="java">
+        <fileset dir="./">
+            <include name="*.jar"/>
+        </fileset>
+    </path>
+</project>
