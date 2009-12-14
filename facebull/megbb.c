@@ -46,6 +46,8 @@ short Vin[MAX_NODES];
 short nNodes = 0;
 short nEdges = 0;
 
+int max_edges = nNodes*nNodes;//don't need this when we get rid of matrix
+
 #define ROWI(k) (k / nNodes)
 #define COLJ(k) (k % nNodes)
 #define KTH_EDGE(k) (A[ROWI(k)][COLJ(k)])
@@ -417,7 +419,7 @@ short pathExists(short src, short dst){
  *
  ***/
 int megbbinit(void){
-  int i, k, max_edges = nNodes*nNodes;
+  int i, k;
   rbar = 0;
   r = 0;
   //alpha = alphabar;//we summed alpha bar in loadFile
@@ -466,12 +468,34 @@ int megbbinit(void){
   return NOT_DONE;
 }
 
+
+void megbb_r(machine_t * k, int t, int rr){
+  
+  if (k->adjPrev==NULL || k->adjNext == NULL)
+    return;
+
+  if (nNodes == (nEdges - rr)){//optimal solution
+    updateSoln();
+    return;
+  }
+  
+  if(k->edgeset == E_EDGE){
+    
+    //check for path that can't get us anywhere
+    if ( (rr + t - (nNodes-(ROWI(k)+1))) > rbar)
+    return;
+  
+  }
+
+  
+}
+
 void megbb(void){
 
   //given the number of nodes, this give number of elements in the complete graph, 
   //or the adjacency matrix, we can optimize this later and better represent the,
   //rows as linked lists which will save memory and time
-  int i, max_edges = nNodes*nNodes;
+  int i;
   int k, kprime, t;//t is cardinality of set S 
   int path_existed;
 

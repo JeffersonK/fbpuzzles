@@ -1,0 +1,28 @@
+
+megbb(k-1, 0, rbar)
+
+megbb(k, t, r)
+
+  BASE CASES:
+  0. if k < 0 || k == max_edges => can't backtrack, update solution if its better and return
+
+  1. if nNodes == nEdges - r => it's optimal, update solution and return
+
+  2. if exploring this path can't yield a more optimal solution than the current best return
+  
+  //forward move
+  if(edge(k) in E)
+    if an alternate path exists
+       put k in EBAR
+       if solution is better than optimal update it
+       call megbb(k+1, t-1, r+1)
+       put k in E       
+
+  //backward move
+  if (Edge(k) in EBAR)
+     put k in E
+     call megbb(k-1, t+1, r-1)
+     put k in EBAR
+
+
+  return;
