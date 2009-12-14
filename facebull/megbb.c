@@ -468,26 +468,60 @@ int megbbinit(void){
   return NOT_DONE;
 }
 
-
 void megbb_r(machine_t * k, int t, int rr){
   
-  if (k->adjPrev==NULL || k->adjNext == NULL)
-    return;
+  if (k->adjPrev==NULL || k->adjNext == NULL){
 
-  if (nNodes == (nEdges - rr)){//optimal solution
-    updateSoln();
+    //DEBUG_ASSERT if(k->adjPrev == NULL) t == 0; r = 0;
+
+    if(rr > rbar)
+      updateOptimumSoln();
     return;
   }
-  
+
+  if (nNodes == (nEdges - rr)){//theoretically optimal solution
+    updateOptimumSoln();
+    return;
+  }
+
   if(k->edgeset == E_EDGE){
-    
-    //check for path that can't get us anywhere
-    if ( (rr + t - (nNodes-(ROWI(k)+1))) > rbar)
-    return;
+    if(/*if by deleting this edge we can't do better than rbar*/)
+      return;
   
+    k->edgeset = NO_EDGE;
+    if(pathExists(k->ci, k->cj)){
+      k->edgeset = EBAR_EDGE;
+      Vout[k->ci]--;
+      Vin[k->cj]--;
+      megbb_r(k->adjNext, t, rr + 1);
+      k->edgeset = E_EDGE;//put edge back
+      Vout[k->ci]++;
+      Vin[k->cj]++;
+    } else {
+      //no path existed
+      k->edgeset = E_EDGE;//restore the edge
+
+      if(/*we can do better than rbar*/)
+	megbb_r(k->adjNext, t + 1, rr);
+    }
+
+    //do nothing and backtrack
+    megbb_r(k->adjPrev, t, rr);  
+    return;
   }
 
+  if(k->edgeset == EBAR_EDGE){
+    //restore the edge then start a forward move
+    k->edgeset = E_BAR;
+    megbb_r(k->adjNext, t - 1, rr - 1
+    
+    //do nothing and backtrack
+    megbb_r(k->adjPrev, t, rr-1);
+    return;
+  }
   
+
+  return;
 }
 
 void megbb(void){
