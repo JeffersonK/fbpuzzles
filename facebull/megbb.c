@@ -52,12 +52,48 @@ short nEdges = 0;
 #define NO_EDGE ( (short) 0)
 #define E_EDGE ( (short) 1)
 #define EBAR_EDGE ( (short)-1)
+   
+void printMachine(machine_t * m){
+  printf("Machine:%hi (@%p)\n", m->edgeRealName, m);
+  printf("\tlabel:%hi\n", m->edgelabel);
+  printf("\tcost:%.0f\n", m->edgecost);
+  printf("\trow:%hi\n", m->ci);
+  printf("\tcol: %hi\n", m->cj);
+  printf("\tadjPrev: @%p\n", m->adjPrev);
+  printf("\tadjNext: @%p\n", m->adjNext);
+}
 
+void printEdgeCosts(void){
+  machine_t * m = EdgesCostHead;
+  while(m != NULL){
+    printMachine(m);
+    m = m->kthNext;
+  }
+}
+
+void printEdgeAdj(void){
+  machine_t * ptr;
+  ptr = EdgesAdjHead;
+
+  printf(" *** FORWARDS ***\n");
+  while(ptr->adjNext != NULL){
+    printMachine(ptr);
+    ptr = ptr->adjNext;
+  }
+  printMachine(ptr);
+
+  printf(" *** REVERSE ***\n");
+  while(ptr->adjPrev != NULL){
+    printMachine(ptr);
+    ptr = ptr->adjPrev;
+  }
+  printMachine(ptr);
+  printf("ptr:%p EdgesAdjHead:%p\n", ptr, EdgesAdjHead);
+}
 
 void printState(){
   int i,j;
   printf("\n");
-  //printf("alphabar = %.0f\n", alphabar);
   printf("rbar = %hi\n", rbar);
   for(i=0; i<nNodes; i++){
     for(j=0; j<nNodes; j++)
@@ -68,11 +104,13 @@ void printState(){
     printf("\n");
   }
   printf("\n");
-  //printf("alpha = %.0f\n", alpha);	
   printf("r = %hi\n", r);
   for(i=0; i<nNodes; i++){
     for(j=0; j<nNodes; j++)
-      printf("%hi ", A[i][j].edgeset);
+      if(A[i][j].edgeset < 0)
+	printf("%hi ", A[i][j].edgeset);
+      else
+	printf(" %hi ", A[i][j].edgeset);
     printf("\n");
   }
 }
@@ -92,6 +130,102 @@ short insert2index(short name, short * list, short * listlen, int maxlen){
     return *listlen-1;
   } 
   return MEMORY_OVERFLOW;
+}
+
+//insert from lowest to highest
+int insertEdgeCost(machine_t * m){
+  machine_t * ptr, * last;
+  
+  last = NULL;
+  m->kthNext = NULL;  
+  if (EdgesCostHead == NULL){
+    EdgesCostHead = m;
+    return (0);
+  }
+  
+  ptr = EdgesCostHead;
+  while (ptr != NULL) 
+    {
+      if (ptr->edgecost > m->edgecost){
+	//insert to left
+	m->kthNext = ptr;
+	if (ptr == EdgesCostHead)
+	  EdgesCostHead = m;
+	else
+	  last->kthNext = m;
+	return (0);
+      } 
+      last = ptr;
+      ptr = ptr->kthNext;
+    }
+  
+  last->kthNext = m;
+  return (0);
+}
+  
+
+
+int insertEdgeAdj(machine_t * m) {
+  machine_t * ptr;
+  m->adjNext = m->adjPrev = NULL;	
+  if (EdgesAdjHead == NULL)
+    {
+      EdgesAdjHead = m;
+      return (0);
+    }
+  
+  ptr = EdgesAdjHead;	
+  while((ptr->adjNext != NULL) && (ptr->ci < m->ci) )
+    ptr = ptr->adjNext;	
+  
+  if (ptr->ci > m->ci){//insert before ptr
+  
+    if (EdgesAdjHead == ptr){
+      m->adjNext = EdgesAdjHead;
+      m->adjPrev = NULL;
+      EdgesAdjHead->adjPrev = m;
+      EdgesAdjHead = m;
+      return (0);
+    }
+    
+    ptr->adjPrev->adjNext = m;//update next pointer in previous node
+    m->adjNext = ptr;
+    m->adjPrev = ptr->adjPrev;
+    ptr->adjPrev = m;
+    return (0);
+  }
+  
+  if(ptr->ci < m->ci){//than ptr->adjNext must be NULL, insert after ptr
+    m->adjNext = ptr->adjNext;
+    ptr->adjNext = m;
+    m->adjPrev = ptr;
+    return (0);
+  }
+  
+  // if we get here than EdgeAdjHead == ptr
+  while( (ptr->adjNext != NULL) && (ptr->cj < m->cj) )
+      ptr = ptr->adjNext;
+
+ if (ptr->cj > m->cj){//insert before ptr  
+    if (EdgesAdjHead == ptr){
+      m->adjNext = EdgesAdjHead;
+      m->adjPrev = NULL;
+      EdgesAdjHead->adjPrev = m;
+      EdgesAdjHead = m;
+      return (0);
+    }
+    ptr->adjPrev->adjNext = m;//update next pointer in previous node
+    m->adjNext = ptr;
+    m->adjPrev = ptr->adjPrev;
+    ptr->adjPrev = m;
+    return (0);
+  }
+  
+ //if(ptr->cj < m->cj){//than ptr->adjNext must be NULL, insert after ptr
+ m->adjNext = ptr->adjNext;
+ ptr->adjNext = m;
+ m->adjPrev = ptr;
+ return (0);
 }
 
 int loadFile(char * filename) {
@@ -176,139 +310,6 @@ int loadFile(char * filename) {
   //compute the sum minimum edge weights from each row is lower bound on solution
   fclose(f);
   return 0;
-}
-
-void printEdgeCosts(void){
-  machine_t * m = EdgesCostHead;
-  while(m != NULL){
-    printMachine(m);
-    m = m->kthNext;
-  }
-}
-
-//insert from lowest to highest
-int insertEdgeCost(machine_t * m){
-  machine_t * ptr, * last;
-  
-  last = NULL;
-  m->kthNext = NULL;  
-  if (EdgesCostHead == NULL){
-    EdgesCostHead = m;
-    return (0);
-  }
-  
-  ptr = EdgesCostHead;
-  while (ptr != NULL) 
-    {
-      if (ptr->edgecost > m->edgecost){
-	//insert to left
-	m->kthNext = ptr;
-	if (ptr == EdgesCostHead)
-	  EdgesCostHead = m;
-	else
-	  last->kthNext = m;
-	return (0);
-      } 
-      last = ptr;
-      ptr = ptr->kthNext;
-    }
-  
-  last->kthNext = m;
-  return (0);
-}
-  
-   
-void printMachine(machine_t * m){
-  printf("Machine:%hi (@%x)\n", m->edgeRealName, m);
-  printf("\tlabel:%hi\n", m->edgelabel);
-  printf("\tcost:%.0f\n", m->edgecost);
-  printf("\trow:%hi\n", m->ci);
-  printf("\tcol: %hi\n", m->cj);
-  printf("\tadjPrev: %x\n", m->adjPrev);
-  printf("\tadjNext: %x\n", m->adjNext);
-}
-
-void printEdgeAdj(void){
-  machine_t * ptr;
-  ptr = EdgesAdjHead;
-
-  printf(" *** FORWARDS ***\n");
-  while(ptr->adjNext != NULL){
-    printMachine(ptr);
-    ptr = ptr->adjNext;
-  }
-  printMachine(ptr);
-
-  printf(" *** REVERSE ***\n");
-  while(ptr->adjPrev != NULL){
-    printMachine(ptr);
-    ptr = ptr->adjPrev;
-  }
-  printMachine(ptr);
-  printf("ptr:%x EdgesAdjHead:%x\n");
-}
-
-int insertEdgeAdj(machine_t * m) {
-  machine_t * ptr;
-  m->adjNext = m->adjPrev = NULL;	
-  if (EdgesAdjHead == NULL)
-    {
-      EdgesAdjHead = m;
-      return (0);
-    }
-  
-  ptr = EdgesAdjHead;	
-  while((ptr->adjNext != NULL) && (ptr->ci < m->ci) )
-    ptr = ptr->adjNext;	
-  
-  if (ptr->ci > m->ci){//insert before ptr
-  
-    if (EdgesAdjHead == ptr){
-      m->adjNext = EdgesAdjHead;
-      m->adjPrev = NULL;
-      EdgesAdjHead->adjPrev = m;
-      EdgesAdjHead = m;
-      return (0);
-    }
-    
-    ptr->adjPrev->adjNext = m;//update next pointer in previous node
-    m->adjNext = ptr;
-    m->adjPrev = ptr->adjPrev;
-    ptr->adjPrev = m;
-    return (0);
-  }
-  
-  if(ptr->ci < m->ci){//than ptr->adjNext must be NULL, insert after ptr
-    m->adjNext = ptr->adjNext;
-    ptr->adjNext = m;
-    m->adjPrev = ptr;
-    return (0);
-  }
-  
-  // if we get here than EdgeAdjHead == ptr
-  while( (ptr->adjNext != NULL) && (ptr->cj < m->cj) )
-      ptr = ptr->adjNext;
-
- if (ptr->cj > m->cj){//insert before ptr  
-    if (EdgesAdjHead == ptr){
-      m->adjNext = EdgesAdjHead;
-      m->adjPrev = NULL;
-      EdgesAdjHead->adjPrev = m;
-      EdgesAdjHead = m;
-      return (0);
-    }
-    ptr->adjPrev->adjNext = m;//update next pointer in previous node
-    m->adjNext = ptr;
-    m->adjPrev = ptr->adjPrev;
-    ptr->adjPrev = m;
-    return (0);
-  }
-  
- //if(ptr->cj < m->cj){//than ptr->adjNext must be NULL, insert after ptr
- m->adjNext = ptr->adjNext;
- ptr->adjNext = m;
- m->adjPrev = ptr;
- return (0);
 }
 
 void printAnswer(void){
@@ -410,23 +411,17 @@ short pathExists(short src, short dst){
 }
 
 
+
 /***
  *
  *
  ***/
-void megbb(void){
-
-  //given the number of nodes, this give number of elements in the complete graph, 
-  //or the adjacency matrix, we can optimize this later and better represent the,
-  //rows as linked lists which will save memory and time
-  int i, max_edges = nNodes*nNodes;
-  int k, kprime, t;//t is cardinality of set S 
-  int path_existed;
-
+int megbbinit(void){
+  int i, k, max_edges = nNodes*nNodes;
   rbar = 0;
   r = 0;
   //alpha = alphabar;//we summed alpha bar in loadFile
-	
+  
   for (i=0; i<MAX_NODES; i++)
     Vout[i] = Vin[i] = 0;
   
@@ -440,7 +435,7 @@ void megbb(void){
   }
 
   if (nEdges == nNodes)//must be hamiltonian cycle if it is strongly connected
-    return;
+    return DONE;
   
   //STEP 2: do a first pass to get the first solution
   for(k=0; k<max_edges; k++){
@@ -453,28 +448,38 @@ void megbb(void){
       A[ROWI(k)][COLJ(k)].edgeset = NO_EDGE;//set hypothesis
       if(pathExists(ROWI(k), COLJ(k))){
 	A[ROWI(k)][COLJ(k)].edgeset = EBAR_EDGE;
-	  //subtract edge weight from alpha		
+	//subtract edge weight from alpha		
 	//alpha -= A[ROWI(k)][COLJ(k)].edgecost;
-	  Vout[ROWI(k)]--;
-	  Vin[COLJ(k)]--;
-	  r++;
-	} 
+	Vout[ROWI(k)]--;
+	Vin[COLJ(k)]--;
+	r++;
+      } 
       else {
-		  A[ROWI(k)][COLJ(k)].edgeset = E_EDGE;//unset hyptohesis
-		  //add edge weight back to alpha
-		  //alpha += A[ROWI(k)][COLJ(k)].edgecost;
-	  }
-	}
+	A[ROWI(k)][COLJ(k)].edgeset = E_EDGE;//unset hyptohesis
+	//add edge weight back to alpha
+	//alpha += A[ROWI(k)][COLJ(k)].edgecost;
+      }
+    }
   }
   //save current solution
   updateOptimumSoln();
-  //printState();
+  return NOT_DONE;
+}
+
+void megbb(void){
+
+  //given the number of nodes, this give number of elements in the complete graph, 
+  //or the adjacency matrix, we can optimize this later and better represent the,
+  //rows as linked lists which will save memory and time
+  int i, max_edges = nNodes*nNodes;
+  int k, kprime, t;//t is cardinality of set S 
+  int path_existed;
 
   if (r == 0)//we couldn't delete any edges 
     return;
   
-  t = 0;
-  k = max_edges - 1;
+  t = 0;  
+  k = kprime = max_edges - 1;
   while(k >= 0){
     if (A[ROWI(k)][COLJ(k)].edgeset == NO_EDGE){
       k--;
@@ -483,13 +488,14 @@ void megbb(void){
       t++;
       k--;
     }
-    else {//try forward move
+    else {//it's an edge we previously deleted, try forward move
       A[ROWI(k)][COLJ(k)].edgeset = E_EDGE;
       Vout[ROWI(k)]++;
       Vin[COLJ(k)]++;
       r--;	  
       if ( (r + t - (nNodes - (ROWI(k)+1)) ) <= rbar)
 	{
+	  //we can't delete this edge
 	  t++;
 	} 
       else 
@@ -517,7 +523,7 @@ void megbb(void){
 		      else 
 			{
 			  A[ROWI(k)][COLJ(k)].edgeset = E_EDGE;//undo hypothesis
-				//add edge weight back to alpha
+			  //add edge weight back to alpha
 			  //alpha += A[ROWI(k)][COLJ(k)].edgecost;
 	
 			}
@@ -538,13 +544,15 @@ void megbb(void){
 		}
 	      	      
 	      k++;
-	    }
+	    }//while (k < max_edges)
 	  
 	  if(updateOptimumSoln() == DONE)
 	    return;
 	}
+      
+      
     }
-    
+
   }//while (k > 0)
 
   return;
@@ -552,7 +560,7 @@ void megbb(void){
 
 int main(int argc, char ** argv){
   int ret;
-  if(ret=loadFile(argv[1]) < 0)
+  if( (ret=loadFile(argv[1])) < 0)
     return -1;
 
 #if DEBUG_LOADFILE
@@ -562,10 +570,13 @@ int main(int argc, char ** argv){
   //printEdgeAdj();
   //printEdgeCosts();
 #endif
-  r = rbar = 0;
+
   bzero(Abar, sizeof(Abar));
-  megbb();
+  if(megbbinit() != DONE)
+    megbb();
+
   printState();
+
   printAnswer();
   return (0);
 }

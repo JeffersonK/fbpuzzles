@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -g
 
-all: facebull
+all: facebull megbb
 
 facebull: facebull.o
 
