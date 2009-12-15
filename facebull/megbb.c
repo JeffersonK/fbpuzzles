@@ -30,14 +30,16 @@ machine_t * EdgesCostHead = NULL;//edges sorted by cost from low to high
 short machineIndex[MAX_EDGES];
 short compoundIndex[MAX_NODES];
 
+float theoryMin = 0;
+
 //working copy
 machine_t A[MAX_NODES][MAX_NODES];
-short r; //the number of edges in Ebar
+//short r; //the number of edges in Ebar
 short t; //the number of edges in S; edges in E, greater than the kth labled edge
 
 //current optimal solution
 machine_t Abar[MAX_NODES][MAX_NODES];
-short rbar;
+float rbar;
 
 //number of edges in/out per node in A
 short Vout[MAX_NODES];
@@ -46,7 +48,7 @@ short Vin[MAX_NODES];
 short nNodes = 0;
 short nEdges = 0;
 
-int max_edges = nNodes*nNodes;//don't need this when we get rid of matrix
+int max_edges; 
 
 #define ROWI(k) (k / nNodes)
 #define COLJ(k) (k % nNodes)
@@ -96,7 +98,7 @@ void printEdgeAdj(void){
 void printState(){
   int i,j;
   printf("\n");
-  printf("rbar = %hi\n", rbar);
+  printf("rbar = %.0f\n", rbar);
   for(i=0; i<nNodes; i++){
     for(j=0; j<nNodes; j++)
       if(Abar[i][j].edgeset < 0)
@@ -106,6 +108,8 @@ void printState(){
     printf("\n");
   }
   printf("\n");
+  
+  /*
   printf("r = %hi\n", r);
   for(i=0; i<nNodes; i++){
     for(j=0; j<nNodes; j++)
@@ -114,7 +118,8 @@ void printState(){
       else
 	printf(" %hi ", A[i][j].edgeset);
     printf("\n");
-  }
+    }
+*/
 }
 
 #define MEMORY_OVERFLOW -666
@@ -166,6 +171,7 @@ int insertEdgeCost(machine_t * m){
 }
   
 
+#define CALCK(i,j) (i*nNodes + j)
 
 int insertEdgeAdj(machine_t * m) {
   machine_t * ptr;
@@ -177,57 +183,33 @@ int insertEdgeAdj(machine_t * m) {
     }
   
   ptr = EdgesAdjHead;	
-  while((ptr->adjNext != NULL) && (ptr->ci < m->ci) )
-    ptr = ptr->adjNext;	
-  
-  if (ptr->ci > m->ci){//insert before ptr
-  
-    if (EdgesAdjHead == ptr){
-      m->adjNext = EdgesAdjHead;
-      m->adjPrev = NULL;
-      EdgesAdjHead->adjPrev = m;
-      EdgesAdjHead = m;
-      return (0);
-    }
+  while( (ptr->adjNext != NULL) && (CALCK(ptr->ci,ptr->cj) < CALCK(m->ci,m->cj)) )
+    ptr = ptr->adjNext;
     
-    ptr->adjPrev->adjNext = m;//update next pointer in previous node
+  if(CALCK(ptr->ci, ptr->cj) > CALCK(m->ci,m->cj)){
+    //insert before ptr
     m->adjNext = ptr;
-    m->adjPrev = ptr->adjPrev;
+    m->adjPrev = ptr->adjPrev;//NULL
     ptr->adjPrev = m;
-    return (0);
-  }
-  
-  if(ptr->ci < m->ci){//than ptr->adjNext must be NULL, insert after ptr
-    m->adjNext = ptr->adjNext;
-    ptr->adjNext = m;
-    m->adjPrev = ptr;
-    return (0);
-  }
-  
-  // if we get here than EdgeAdjHead == ptr
-  while( (ptr->adjNext != NULL) && (ptr->cj < m->cj) )
-      ptr = ptr->adjNext;
-
- if (ptr->cj > m->cj){//insert before ptr  
-    if (EdgesAdjHead == ptr){
-      m->adjNext = EdgesAdjHead;
-      m->adjPrev = NULL;
-      EdgesAdjHead->adjPrev = m;
+    if(ptr == EdgesAdjHead && ptr->adjPrev == NULL){
       EdgesAdjHead = m;
-      return (0);
-    }
-    ptr->adjPrev->adjNext = m;//update next pointer in previous node
-    m->adjNext = ptr;
-    m->adjPrev = ptr->adjPrev;
-    ptr->adjPrev = m;
+    }  else
+      m->adjPrev->adjNext = m;
+
+    if(ptr == EdgesAdjHead && ptr->adjPrev != NULL){
+      printf("invariant broken %d\n", __LINE__);
+      return -1;
+    }	
     return (0);
   }
-  
- //if(ptr->cj < m->cj){//than ptr->adjNext must be NULL, insert after ptr
- m->adjNext = ptr->adjNext;
- ptr->adjNext = m;
- m->adjPrev = ptr;
- return (0);
+  //insert after ptr
+  m->adjPrev = ptr;
+  m->adjNext = ptr->adjNext;
+  if (ptr->adjNext != NULL)
+    ptr->adjNext->adjPrev = m;
+
+  ptr->adjNext = m;
+  return (0);
 }
 
 int loadFile(char * filename) {
@@ -239,7 +221,7 @@ int loadFile(char * filename) {
   int i, j, u, uindex, v, vindex, machIntName, machIndex;
   int cost;
   machine_t * ptr; 
-  
+  rbar = 0;
   memset(machineIndex, 0xff, sizeof(machineIndex));
   memset(compoundIndex, 0xff, sizeof(compoundIndex));
   
@@ -291,7 +273,7 @@ int loadFile(char * filename) {
     A[uindex][vindex].edgeset = (short)E_EDGE;
     A[uindex][vindex].edgelabel = machIndex;
     A[uindex][vindex].edgecost = (float) cost;
-    //alphabar += cost;
+    rbar += cost; //this first solution is all edges
 
     /*
       ptr = (machine_t*) malloc(sizeof(machine_t));  
@@ -310,6 +292,7 @@ int loadFile(char * filename) {
     insertEdgeCost(ptr);
   }	
   //compute the sum minimum edge weights from each row is lower bound on solution
+  max_edges = nNodes * nNodes;//TODO remove later
   fclose(f);
   return 0;
 }
@@ -317,7 +300,7 @@ int loadFile(char * filename) {
 void printAnswer(void){
   int u, v;
   int first = 1;
-  printf("%d\n", rbar);
+  printf("%.0f\n", rbar);
   for(u=0;u<nNodes;u++)
     for(v=0;v<nNodes;v++)
       {
@@ -335,13 +318,13 @@ void printAnswer(void){
 
 #define DONE (99)
 #define NOT_DONE (0)
-int updateOptimumSoln(void){
+int updateOptimumSoln(int rr){
   int i, j;
 
-  if (rbar > r)
-	  return NOT_DONE;
+  if (rbar < rr)
+    return NOT_DONE;
 	
-  rbar = r;
+  rbar = rr;
   //alphabar = alpha;
   //not sure if memmove will be faster than loop or not here
   //for (i=0; i<nNodes; i++)
@@ -355,10 +338,11 @@ int updateOptimumSoln(void){
   //this is probably not a good check if are looking for
   //a minimum over edge weights because there could be
   //more than one solution with |nNodes| edges
-  if( (nEdges - rbar) == nNodes) 
+  /*if( (nEdges - rbar) == nNodes) 
     return DONE;
   else
-    return NOT_DONE;
+  return NOT_DONE;*/
+  return NOT_DONE;
 }
 
 //A is the adjacency Matrix
@@ -420,110 +404,194 @@ short pathExists(short src, short dst){
  ***/
 int megbbinit(void){
   int i, k;
-  rbar = 0;
-  r = 0;
-  //alpha = alphabar;//we summed alpha bar in loadFile
-  
-  for (i=0; i<MAX_NODES; i++)
+  float min;
+  machine_t * p;
+  int r = rbar;
+
+  for (i=0; i<nNodes; i++)
     Vout[i] = Vin[i] = 0;
   
   //STEP 1
-  for(k=0; k<max_edges; k++){
-    if (A[ROWI(k)][COLJ(k)].edgeset == E_EDGE){
-      Vout[ROWI(k)]++;
-      Vin[COLJ(k)]++;
-      //nEdges ++;//TODO: can remove once we merge code
+  p = EdgesAdjHead;
+  while(p != NULL)
+    {
+      if (p->edgeset == E_EDGE){
+	Vout[p->ci]++;
+	Vin[p->cj]++;
+      }
+      p = p->adjNext;
     }
-  }
 
-  if (nEdges == nNodes)//must be hamiltonian cycle if it is strongly connected
-    return DONE;
-  
+  p = EdgesAdjHead;
+  i = p->ci;
+  min = p->edgecost;
+  theoryMin = 0;
+  while(p != NULL){
+    if(p->ci > i){//row changed
+      printf("min in row %d is %.0f\n", i, min);
+      i = p->ci;
+      theoryMin += min;
+      min = p->edgecost;
+    } else if (p->edgecost < min){
+      min = p->edgecost;
+    }
+    p = p->adjNext;
+  }
+  printf("min in row %d is %.0f\n", i, min);
+  theoryMin += min;
+  printf("theoretical min is %.0f\n", theoryMin);
+
+  p = EdgesAdjHead;
   //STEP 2: do a first pass to get the first solution
   for(k=0; k<max_edges; k++){
+    //TODO: while(p != NULL){
     //printf("A[%hi][%hi]=%hi Vout[%hi]=%hi Vin[%hi]=%hi\n",
     //   ROWI(k),COLJ(k),A[ROWI(k)][COLJ(k)].edgeset,ROWI(k),Vout[ROWI(k)],COLJ(k),Vin[COLJ(k)]);
     if( (A[ROWI(k)][COLJ(k)].edgeset == E_EDGE) &&
 	(Vout[ROWI(k)] != 1) &&
-	(Vin[COLJ(k)] != 1) ){
-      
-      A[ROWI(k)][COLJ(k)].edgeset = NO_EDGE;//set hypothesis
-      if(pathExists(ROWI(k), COLJ(k))){
-	A[ROWI(k)][COLJ(k)].edgeset = EBAR_EDGE;
-	//subtract edge weight from alpha		
-	//alpha -= A[ROWI(k)][COLJ(k)].edgecost;
-	Vout[ROWI(k)]--;
-	Vin[COLJ(k)]--;
-	r++;
-      } 
-      else {
-	A[ROWI(k)][COLJ(k)].edgeset = E_EDGE;//unset hyptohesis
-	//add edge weight back to alpha
-	//alpha += A[ROWI(k)][COLJ(k)].edgecost;
+	(Vin[COLJ(k)] != 1) )
+      {
+	
+	A[ROWI(k)][COLJ(k)].edgeset = NO_EDGE;//set hypothesis
+	if(pathExists(ROWI(k), COLJ(k))){
+	  A[ROWI(k)][COLJ(k)].edgeset = EBAR_EDGE;
+	  Vout[ROWI(k)]--;
+	  Vin[COLJ(k)]--;
+	  r -= A[ROWI(k)][COLJ(k)].edgecost;
+	} 
+	else {
+	  A[ROWI(k)][COLJ(k)].edgeset = E_EDGE;//unset hyptohesis
+	}
       }
-    }
+    //TODO: p = p->adjNext;
   }
   //save current solution
-  updateOptimumSoln();
+  updateOptimumSoln(r);
   return NOT_DONE;
 }
 
-void megbb_r(machine_t * k, int t, int rr){
+#define BACKWARD 0
+#define FORWARD 1
+void megbb_r(machine_t * k, int t, int rr, int direction){
   
-  if (k->adjPrev==NULL || k->adjNext == NULL){
-
-    //DEBUG_ASSERT if(k->adjPrev == NULL) t == 0; r = 0;
-
-    if(rr > rbar)
-      updateOptimumSoln();
-    return;
-  }
-
-  if (nNodes == (nEdges - rr)){//theoretically optimal solution
-    updateOptimumSoln();
-    return;
-  }
-
-  if(k->edgeset == E_EDGE){
-    if(/*if by deleting this edge we can't do better than rbar*/)
+  if (k == NULL)
+    {
+      if(rr < rbar)
+	updateOptimumSoln(rr);
       return;
-  
-    k->edgeset = NO_EDGE;
-    if(pathExists(k->ci, k->cj)){
-      k->edgeset = EBAR_EDGE;
-      Vout[k->ci]--;
-      Vin[k->cj]--;
-      megbb_r(k->adjNext, t, rr + 1);
-      k->edgeset = E_EDGE;//put edge back
-      Vout[k->ci]++;
-      Vin[k->cj]++;
-    } else {
-      //no path existed
-      k->edgeset = E_EDGE;//restore the edge
-
-      if(/*we can do better than rbar*/)
-	megbb_r(k->adjNext, t + 1, rr);
     }
 
-    //do nothing and backtrack
-    megbb_r(k->adjPrev, t, rr);  
+  //TODO: rr here should be sum of min edge of each row
+  if (rr == theoryMin)//nNodes == (nEdges - rr)){//theoretically optimal solution
+    updateOptimumSoln(rr);
     return;
   }
 
-  if(k->edgeset == EBAR_EDGE){
-    //restore the edge then start a forward move
-    k->edgeset = E_BAR;
-    megbb_r(k->adjNext, t - 1, rr - 1
-    
-    //do nothing and backtrack
-    megbb_r(k->adjPrev, t, rr-1);
+  if(direction == FORWARD)/*k->edgeset == E_EDGE*/
+    {
+      if(k->edgeset == E_EDGE && Vout[k->ci] != 1 && Vin[k->cj] != 1)
+      {  
+	/*if by deleting this edge we can't do better than rbar*/   
+	k->edgeset = NO_EDGE;
+	if(pathExists(k->ci, k->cj))
+	  {
+	    k->edgeset = EBAR_EDGE;
+	    Vout[k->ci]--;
+	    Vin[k->cj]--;
+	    megbb_r(k->adjNext, t-1, rr - k->edgecost, FORWARD);
+	    k->edgeset = E_EDGE;//put edge back
+	    Vout[k->ci]++;
+	    Vin[k->cj]++;
+	  } 
+	else 
+	  {
+	    //no path existed, so we can't delete this edge, but continue forward move
+	    k->edgeset = E_EDGE;//restore the edge
+	  }
+     
+	/*else k->edgeset == EBAR_EDGE */
+      }
+    megbb_r(k->adjNext, t-1, rr, FORWARD);      
     return;
   }
+
+  if (direction == BACKWARD)
+    {
+    if(k->edgeset == EBAR_EDGE)
+      {
+	//restore the edge then start a forward move
+	k->edgeset = E_EDGE;
+	Vout[k->ci]++;
+	Vin[k->cj]++;
+	megbb_r(k->adjNext, t - 1, rr + k->edgecost, FORWARD);
+	k->edgeset = EBAR_EDGE;
+	Vout[k->ci]--;
+	Vin[k->cj]--;
+	//don't have to do this we just came from there megbb_r(k->adjNext, t - 1, rr, FORWARD);
+      } 
+    else if(Vout[k->ci] != 1 && Vin[k->cj] != 1)
+      {  
+	//see if an alternate path exists if you delete  this edge
+	k->edgeset = NO_EDGE;
+	if(pathExists(k->ci, k->cj))
+	  {
+	    k->edgeset = EBAR_EDGE;
+	    Vout[k->ci]--;
+	    Vin[k->cj]--;
+	    megbb_r(k->adjNext, t, rr - k->edgecost, FORWARD);
+	    k->edgeset = E_EDGE;//put edge back
+	    Vout[k->ci]++;
+	    Vin[k->cj]++;
+	  } 
+	else 
+	  {
+	    k->edgeset = E_EDGE;//put edge back
+	  }
+      }
+    //continue backtrack
+    megbb_r(k->adjPrev, t + 1, rr, BACKWARD);
+    }
   
-
   return;
 }
 
+
+int main(int argc, char ** argv){
+  int ret;
+  machine_t * tail;
+
+  if( (ret=loadFile(argv[1])) < 0)
+    return -1;
+
+#if DEBUG_LOADFILE
+  printf("loadFile: %d\n", ret);
+  printf("nNodes: %d\n", nNodes);
+  printf("nEdges: %d\n", nEdges);
+  printEdgeAdj();
+  //printEdgeCosts();
+#endif
+  
+  if (nEdges == nNodes)//must be hamiltonian cycle if it is strongly connected
+    return DONE;
+
+  tail = EdgesAdjHead;
+  while (tail->adjNext != NULL)
+    tail = tail->adjNext;
+
+  bzero(Abar, sizeof(Abar));
+  if(megbbinit() != DONE)
+    megbb_r(tail, 0, rbar, BACKWARD);
+  else
+    printf("early done!");
+  printState();
+  printAnswer();
+  return (0);
+}
+
+
+
+
+/*
 void megbb(void){
 
   //given the number of nodes, this give number of elements in the complete graph, 
@@ -537,6 +605,7 @@ void megbb(void){
     return;
   
   t = 0;  
+  max_edges = nNodes*nNodes;//don't need this when we get rid of matrix
   k = kprime = max_edges - 1;
   while(k >= 0){
     if (A[ROWI(k)][COLJ(k)].edgeset == NO_EDGE){
@@ -595,7 +664,7 @@ void megbb(void){
 		  
 		  if ( (t - (nNodes-ROWI(k))) == 0)
 		    {
-		      if(updateOptimumSoln() == DONE)
+		      if(updateOptimumSoln(r) == DONE)
 			return;
 		      break;
 		    }   		
@@ -604,7 +673,7 @@ void megbb(void){
 	      k++;
 	    }//while (k < max_edges)
 	  
-	  if(updateOptimumSoln() == DONE)
+	  if(updateOptimumSoln(r) == DONE)
 	    return;
 	}
       
@@ -615,26 +684,4 @@ void megbb(void){
 
   return;
 }
-
-int main(int argc, char ** argv){
-  int ret;
-  if( (ret=loadFile(argv[1])) < 0)
-    return -1;
-
-#if DEBUG_LOADFILE
-  printf("loadFile: %d\n", ret);
-  printf("nNodes: %d\n", nNodes);
-  printf("nEdges: %d\n", nEdges);
-  //printEdgeAdj();
-  //printEdgeCosts();
-#endif
-
-  bzero(Abar, sizeof(Abar));
-  if(megbbinit() != DONE)
-    megbb();
-
-  printState();
-
-  printAnswer();
-  return (0);
-}
+*/
