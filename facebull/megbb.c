@@ -1,11 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <math.h>
+//#include <math.h>
 #include <string.h> //for memmove
 
 #define DEBUG_LOADFILE 1
+#define DEBUG_MEGBB_R 1
 
-#define INF (HUGE_VAL)
+#define INF ((2^31)-1)
 #define MAX_NODES (128)
 #define MAX_EDGES (MAX_NODES*MAX_NODES) //number of elements in adjacency matrix (we can do better than this with a linked lists
 #define MAX_NAME_LEN (8)
@@ -14,7 +15,8 @@ typedef struct MACHINE_T {
   short edgeset;//which edge set its part of {NO_EDGE, E_EDGE, EBAR_EDGE}
   short edgeRealName;
   short edgelabel;//label k: for k in [0 ... n-1]
-  float edgecost;
+  short inAbar; //whether edge is part of optimal solution or not
+  int edgecost;
   short ci;
   short cj;
   struct MACHINE_T * adjNext;
@@ -22,24 +24,45 @@ typedef struct MACHINE_T {
   struct MACHINE_T * kthNext;//pointer to next highest edge weight
 } machine_t;
 
-machine_t * maxEdgePerRow = NULL;//linked list of the heaviest edge per row
-machine_t * minEdgePerCol = NULL;//linked list of the lightest edge per row
+#define BACKWARD 0
+#define FORWARD 1
+
+#define DONE (99)
+#define NOT_DONE (0)
+
+int nS;//cardinality of edges in S, where S is set of edges for i > k in E
+int sumS;//sum of edge weights for edges in S
+//Ebar is the set of edges that have been deleted from E
+int nEbar;//cardinality of Ebar
+int sumEbar;//sum of edge weights in Ebar, we want to maximize this in our solution
+int sumEbarprime;//current max sum of edges we can delete
+
+#define INSERT_EBAR(m) m->edgeset=EBAR_EDGE;sumEbar+=m->edgecost;nEbar++;Vout[m->ci]--;Vin[m->cj]--
+#define INSERT_E(m) m->edgeset=E_EDGE;sumEbar-=m->edgecost;nEbar--;Vout[m->ci]++;Vin[m->cj]++
+#define INSERT_S(m) nS++;sumS+=m->edgecost
+#define REMOVE_S(m) nS--;sumS-=m->edgecost
+#define EDGE_IN_E(m) (m->edgeset == E_EDGE)
+#define EDGE_IN_EBAR(m) (m->edgeset == EBAR_EDGE)
+
+
+
+//machine_t * maxEdgePerRow = NULL;//linked list of the heaviest edge per row
+//machine_t * minEdgePerCol = NULL;//linked list of the lightest edge per row
 machine_t * EdgesAdjHead = NULL;//replaces the adjaceny matrix
 machine_t * EdgesCostHead = NULL;//edges sorted by cost from low to high
 
 short machineIndex[MAX_EDGES];
 short compoundIndex[MAX_NODES];
 
-float theoryMin = 0;
+//the ith element contains the sum of the min edges in the last i rows
+int minSumRows[MAX_NODES];
+int theoryMin;//TODO: this is redundant remove
+int graphWeight;
 
 //working copy
 machine_t A[MAX_NODES][MAX_NODES];
-//short r; //the number of edges in Ebar
-short t; //the number of edges in S; edges in E, greater than the kth labled edge
 
-//current optimal solution
-machine_t Abar[MAX_NODES][MAX_NODES];
-float rbar;
+//int rbar;
 
 //number of edges in/out per node in A
 short Vout[MAX_NODES];
@@ -48,7 +71,6 @@ short Vin[MAX_NODES];
 short nNodes = 0;
 short nEdges = 0;
 
-int max_edges; 
 
 #define ROWI(k) (k / nNodes)
 #define COLJ(k) (k % nNodes)
@@ -60,7 +82,7 @@ int max_edges;
 void printMachine(machine_t * m){
   printf("Machine:%hi (@%p)\n", m->edgeRealName, m);
   printf("\tlabel:%hi\n", m->edgelabel);
-  printf("\tcost:%.0f\n", m->edgecost);
+  printf("\tcost:%d\n", m->edgecost);
   printf("\trow:%hi\n", m->ci);
   printf("\tcol: %hi\n", m->cj);
   printf("\tadjPrev: @%p\n", m->adjPrev);
@@ -97,14 +119,15 @@ void printEdgeAdj(void){
 
 void printState(){
   int i,j;
-  printf("\n");
-  printf("rbar = %.0f\n", rbar);
+  printf("--- STATE ---\n");
+  printf("Best(%d) sumEbarprime(%d) sumEbar(%d) nEbar(%d) nS(%d) sumS(%d)\n", 
+	 graphWeight-sumEbarprime, sumEbarprime, sumEbar, nEbar, nS, sumS);
   for(i=0; i<nNodes; i++){
     for(j=0; j<nNodes; j++)
-      if(Abar[i][j].edgeset < 0)
-	printf("%hi ", Abar[i][j].edgeset);
+      if(A[i][j].edgeset < 0)
+	printf("%hi(%hi) ", A[i][j].edgeset, A[i][j].inAbar);
       else
-	printf(" %hi ", Abar[i][j].edgeset);
+	printf(" %hi(%hi) ", A[i][j].edgeset, A[i][j].inAbar);
     printf("\n");
   }
   printf("\n");
@@ -218,10 +241,12 @@ int loadFile(char * filename) {
   char compoundA[MAX_NAME_LEN];
   char compoundB[MAX_NAME_LEN];
   char machineName[MAX_NAME_LEN];
-  int i, j, u, uindex, v, vindex, machIntName, machIndex;
+  int i, j, u, uindex, v, vindex;
+  short machIntName, machIndex;
   int cost;
   machine_t * ptr; 
-  rbar = 0;
+  //rbar = 0;
+  graphWeight = 0;
   memset(machineIndex, 0xff, sizeof(machineIndex));
   memset(compoundIndex, 0xff, sizeof(compoundIndex));
   
@@ -231,7 +256,7 @@ int loadFile(char * filename) {
       if (i == j) {
 	A[i][j].edgecost = 0;
       } else {
-	A[i][j].edgecost = INFINITY;
+	A[i][j].edgecost = INF;//max signed int
       }
       A[i][j].edgelabel = -1;//the index in the machineList where the real name is stored
       A[i][j].edgeset = NO_EDGE;
@@ -272,8 +297,9 @@ int loadFile(char * filename) {
 #endif
     A[uindex][vindex].edgeset = (short)E_EDGE;
     A[uindex][vindex].edgelabel = machIndex;
-    A[uindex][vindex].edgecost = (float) cost;
-    rbar += cost; //this first solution is all edges
+    A[uindex][vindex].edgecost = cost;
+    graphWeight += cost;
+    //    rbar += cost; //this first solution is all edges
 
     /*
       ptr = (machine_t*) malloc(sizeof(machine_t));  
@@ -287,62 +313,45 @@ int loadFile(char * filename) {
     ptr->edgeRealName = machIntName;
     ptr->ci = uindex;
     ptr->cj = vindex;
-    ptr->edgecost = (float) cost;
+    ptr->edgecost = cost;
+    
     insertEdgeAdj(ptr);
     insertEdgeCost(ptr);
   }	
   //compute the sum minimum edge weights from each row is lower bound on solution
-  max_edges = nNodes * nNodes;//TODO remove later
   fclose(f);
   return 0;
 }
 
 void printAnswer(void){
-  int u, v;
+  machine_t * p = EdgesAdjHead;
   int first = 1;
-  printf("%.0f\n", rbar);
-  for(u=0;u<nNodes;u++)
-    for(v=0;v<nNodes;v++)
-      {
-	if(Abar[u][v].edgeset == E_EDGE){
-	  if (first){
-	    first = 0;		
-	    printf("%hi", machineIndex[A[u][v].edgelabel]);		
-	  } else
-	    printf(" %hi", machineIndex[A[u][v].edgelabel]);		
-	}
-      }
-  
+
+  printf("%d\n", graphWeight - sumEbarprime);  
+  while (p != NULL){
+    if (p->inAbar){
+      if (first){
+	first = 0;		
+	printf("%hi", p->edgeRealName);		
+      } else
+	printf(" %hi", p->edgeRealName);		
+    }
+    p = p->adjNext;
+  }
   printf("\n");
 }
 
-#define DONE (99)
-#define NOT_DONE (0)
-int updateOptimumSoln(int rr){
-  int i, j;
-
-  if (rbar < rr)
-    return NOT_DONE;
-	
-  rbar = rr;
-  //alphabar = alpha;
-  //not sure if memmove will be faster than loop or not here
-  //for (i=0; i<nNodes; i++)
-  //memmove((void *) &Abar[i], (void *)&A[i], sizeof(short)*nNodes); 
-  for(i=0; i<nNodes; i++){
-    for(j=0; j<nNodes; j++){
-      Abar[i][j] = A[i][j];
-    }
+void updateOptimumSoln(int ebar){
+  
+  machine_t * p = EdgesAdjHead;
+  sumEbarprime = ebar;
+  while (p != NULL){
+    if (p->edgeset == E_EDGE)
+      p->inAbar = 1;
+    else
+      p->inAbar = 0;    
+    p = p->adjNext;
   }
-
-  //this is probably not a good check if are looking for
-  //a minimum over edge weights because there could be
-  //more than one solution with |nNodes| edges
-  /*if( (nEdges - rbar) == nNodes) 
-    return DONE;
-  else
-  return NOT_DONE;*/
-  return NOT_DONE;
 }
 
 //A is the adjacency Matrix
@@ -404,12 +413,12 @@ short pathExists(short src, short dst){
  ***/
 int megbbinit(void){
   int i, k;
-  float min;
+  int min;
   machine_t * p;
-  int r = rbar;
-
+  //int r = rbar;//rbar is sum of all edges at this point
+  
   for (i=0; i<nNodes; i++)
-    Vout[i] = Vin[i] = 0;
+    minSumRows[i] = Vout[i] = Vin[i] = 0;
   
   //STEP 1
   p = EdgesAdjHead;
@@ -428,7 +437,8 @@ int megbbinit(void){
   theoryMin = 0;
   while(p != NULL){
     if(p->ci > i){//row changed
-      printf("min in row %d is %.0f\n", i, min);
+      printf("min in row %d is %d\n", i, min);
+      minSumRows[i] = min;
       i = p->ci;
       theoryMin += min;
       min = p->edgecost;
@@ -437,129 +447,191 @@ int megbbinit(void){
     }
     p = p->adjNext;
   }
-  printf("min in row %d is %.0f\n", i, min);
+  minSumRows[i] = min;
+  printf("min in row %d is %d\n", i, min);
   theoryMin += min;
-  printf("theoretical min is %.0f\n", theoryMin);
+  printf("theoretical minimum solution is %d\n", theoryMin);
 
+  min = minSumRows[nNodes-1];
+  for(i=nNodes-1;i>=0;i--){
+    min = minSumRows[i];
+    if (i == nNodes - 1)
+      minSumRows[i] = min;
+    else
+      minSumRows[i] = min + minSumRows[i+1];
+    printf("minSumRows[%d] = %d\n", i, minSumRows[i]);
+  }
+  //minSumRows[0] = theoryMin;
+
+  nS = 0;
+  sumS = 0;
+  sumEbar = 0;
+  nEbar = 0;
+  sumEbarprime = 0;
   p = EdgesAdjHead;
   //STEP 2: do a first pass to get the first solution
-  for(k=0; k<max_edges; k++){
-    //TODO: while(p != NULL){
+  while(p != NULL){
     //printf("A[%hi][%hi]=%hi Vout[%hi]=%hi Vin[%hi]=%hi\n",
     //   ROWI(k),COLJ(k),A[ROWI(k)][COLJ(k)].edgeset,ROWI(k),Vout[ROWI(k)],COLJ(k),Vin[COLJ(k)]);
-    if( (A[ROWI(k)][COLJ(k)].edgeset == E_EDGE) &&
-	(Vout[ROWI(k)] != 1) &&
-	(Vin[COLJ(k)] != 1) )
-      {
-	
-	A[ROWI(k)][COLJ(k)].edgeset = NO_EDGE;//set hypothesis
-	if(pathExists(ROWI(k), COLJ(k))){
-	  A[ROWI(k)][COLJ(k)].edgeset = EBAR_EDGE;
-	  Vout[ROWI(k)]--;
-	  Vin[COLJ(k)]--;
-	  r -= A[ROWI(k)][COLJ(k)].edgecost;
-	} 
-	else {
-	  A[ROWI(k)][COLJ(k)].edgeset = E_EDGE;//unset hyptohesis
-	}
-      }
-    //TODO: p = p->adjNext;
+    if( (EDGE_IN_E(p)) && (Vout[p->ci] != 1) && (Vin[p->cj] != 1) ){
+      
+      p->edgeset = NO_EDGE;//set hypothesis
+      if(pathExists(p->ci, p->cj)){
+	INSERT_EBAR(p);
+      } 
+      else 
+	p->edgeset = E_EDGE;//unset hyptohesis
+    }
+    p = p->adjNext;
   }
   //save current solution
-  updateOptimumSoln(r);
+  updateOptimumSoln(sumEbar);
   return NOT_DONE;
 }
 
-#define BACKWARD 0
-#define FORWARD 1
-void megbb_r(machine_t * k, int t, int rr, int direction){
-  
-  if (k == NULL)
-    {
-      if(rr < rbar)
-	updateOptimumSoln(rr);
+void megbb_r(machine_t * k, int direction){
+
+  if (k == NULL && direction == FORWARD)
+    {//we have exhausted the forward move
+#if DEBUG_MEGBB_R
+      if ( (nS != 0) && (sumS != 0) ) 
+	printf("Forward Move Finished: invariant broken ns=%d sumS=%d\n", nS, sumS);
+#endif
+      if(sumEbar > sumEbarprime)
+	updateOptimumSoln(sumEbar);
       return;
     }
+  else if (k == NULL){
+#if DEBUG_MEGBB_R
+    if (sumEbar != 0)
+      printf("Backtrack Finished: invariant broken sumEbar = %d\n", sumEbar);
+#endif
+    //megbb_r(EdgesAdjHead, FORWARD);
+    return;//done back tracking
+  }
 
-  //TODO: rr here should be sum of min edge of each row
-  if (rr == theoryMin)//nNodes == (nEdges - rr)){//theoretically optimal solution
-    updateOptimumSoln(rr);
+  if ( (graphWeight - sumEbar) == minSumRows[0]){
+    //we have found the theoretical optimum solution for this graph
+    //i.e. - the current solution has the minimum edge from each row
+    updateOptimumSoln(sumEbar);
     return;
   }
 
-  if(direction == FORWARD)/*k->edgeset == E_EDGE*/
-    {
-      if(k->edgeset == E_EDGE && Vout[k->ci] != 1 && Vin[k->cj] != 1)
+  printf("@%d(%d) ", k->edgeRealName, direction);
+  if(direction == FORWARD){/*k->edgeset == E_EDGE*/
+    //if ( (rr + t - minSumRows[k->ci]) <= rbar)
+    //  return;
+    if(EDGE_IN_E(k)){
+      if( (Vout[k->ci] != 1) && (Vin[k->cj] != 1) )
       {  
 	/*if by deleting this edge we can't do better than rbar*/   
 	k->edgeset = NO_EDGE;
-	if(pathExists(k->ci, k->cj))
-	  {
-	    k->edgeset = EBAR_EDGE;
-	    Vout[k->ci]--;
-	    Vin[k->cj]--;
-	    megbb_r(k->adjNext, t-1, rr - k->edgecost, FORWARD);
-	    k->edgeset = E_EDGE;//put edge back
-	    Vout[k->ci]++;
-	    Vin[k->cj]++;
-	  } 
+	if(pathExists(k->ci, k->cj)){
+	  INSERT_EBAR(k);
+	  REMOVE_S(k);
+	  megbb_r(k->adjNext, FORWARD);    
+	  INSERT_S(k);
+	  INSERT_E(k);
+	} 
 	else 
-	  {
+	  { 
 	    //no path existed, so we can't delete this edge, but continue forward move
 	    k->edgeset = E_EDGE;//restore the edge
-	  }
-     
-	/*else k->edgeset == EBAR_EDGE */
-      }
-    megbb_r(k->adjNext, t-1, rr, FORWARD);      
-    return;
-  }
-
-  if (direction == BACKWARD)
-    {
-    if(k->edgeset == EBAR_EDGE)
-      {
-	//restore the edge then start a forward move
-	k->edgeset = E_EDGE;
-	Vout[k->ci]++;
-	Vin[k->cj]++;
-	megbb_r(k->adjNext, t - 1, rr + k->edgecost, FORWARD);
-	k->edgeset = EBAR_EDGE;
-	Vout[k->ci]--;
-	Vin[k->cj]--;
-	//don't have to do this we just came from there megbb_r(k->adjNext, t - 1, rr, FORWARD);
-      } 
-    else if(Vout[k->ci] != 1 && Vin[k->cj] != 1)
-      {  
-	//see if an alternate path exists if you delete  this edge
-	k->edgeset = NO_EDGE;
-	if(pathExists(k->ci, k->cj))
-	  {
-	    k->edgeset = EBAR_EDGE;
-	    Vout[k->ci]--;
-	    Vin[k->cj]--;
-	    megbb_r(k->adjNext, t, rr - k->edgecost, FORWARD);
-	    k->edgeset = E_EDGE;//put edge back
-	    Vout[k->ci]++;
-	    Vin[k->cj]++;
-	  } 
-	else 
-	  {
-	    k->edgeset = E_EDGE;//put edge back
+	    REMOVE_S(k);
+	    megbb_r(k->adjNext, FORWARD);
 	  }
       }
-    //continue backtrack
-    megbb_r(k->adjPrev, t + 1, rr, BACKWARD);
+    } 
+    else {//EDGE_IN_EBAR(k) == true
+      megbb_r(k->adjNext, FORWARD);    
     }
-  
+    
+    if (k->adjNext == NULL){
+      //start back tracking move when we have exhausted forward move
+      	INSERT_S(k);
+	megbb_r(k->adjPrev, BACKWARD);
+	REMOVE_S(k);
+	//don't have to update optimal because we are at last edge and just increased the current solution
+    }
+    return;
+  }//FORWARD
+
+  //DIRECTION IS BACKWARD
+  if(EDGE_IN_EBAR(k)){
+    //restore the edge then start a forward move
+    INSERT_E(k);
+    //! REMOVE_S(k) because k can't be in S
+    megbb_r(k->adjNext, FORWARD);
+    INSERT_S(k);
+    megbb_r(k->adjPrev, BACKWARD);
+    REMOVE_S(k);
+  }
+  else {//if (EDGE_IN_E(k))
+    //REMOVE_S(k);
+    //megbb_r(k->adjNext, FORWARD);
+  }
+ 
+  megbb_r(k->adjPrev, BACKWARD);  
   return;
 }
 
+void forward(machine_t *k){
+
+
+}
+
+void megbb_r2(machine_t * k){
+
+  machine_t * p = k;
+
+  if (k == NULL){
+    if (sumEbar > sumEbarprime)
+      updateOptimumSoln(sumEbar);
+    return;
+  }
+
+  while (p != NULL){
+    if (EDGE_IN_E(k)){
+      //INSERT_S(k);
+      megbb_r2(k->adjPrev);
+      //try to remove it
+      if( (Vout[k->ci] != 1) && (Vin[k->cj] != 1) )
+	{  
+	  /*if by deleting this edge we can't do better than rbar*/   
+	  k->edgeset = NO_EDGE;
+	  if(pathExists(k->ci, k->cj)){
+	    INSERT_EBAR(k);
+	    //REMOVE_S(k);
+	    megbb_r2(k->adjNext);
+	    //INSERT_S(k);
+	    //INSERT_E(k);
+	  }
+	else 
+	  { 
+	    //no path existed, so we can't delete this edge, but continue forward move
+	    k->edgeset = E_EDGE;//restore the edge
+	    //REMOVE_S(k);
+	    megbb_r2(k->adjNext);
+	  }
+      
+	}
+    }
+ 
+    if (EDGE_IN_EBAR(k)){
+      INSERT_E(k);
+      megbb_r2(k->adjNext);
+    }
+
+    //INSERT_S(p);
+    p = p->adjPrev;
+  }
+  return;
+}
 
 int main(int argc, char ** argv){
   int ret;
   machine_t * tail;
-
+  
   if( (ret=loadFile(argv[1])) < 0)
     return -1;
 
@@ -567,31 +639,38 @@ int main(int argc, char ** argv){
   printf("loadFile: %d\n", ret);
   printf("nNodes: %d\n", nNodes);
   printf("nEdges: %d\n", nEdges);
+  printf("graphWeight: %d\n", graphWeight);
   printEdgeAdj();
   //printEdgeCosts();
 #endif
   
-  if (nEdges == nNodes)//must be hamiltonian cycle if it is strongly connected
+  if (nEdges == nNodes){
+    //must be hamiltonian cycle if it is strongly connected
+    updateOptimumSoln(graphWeight);
+    printAnswer();
     return DONE;
+  }
 
+  //find last element in adjacency list
   tail = EdgesAdjHead;
   while (tail->adjNext != NULL)
     tail = tail->adjNext;
 
-  bzero(Abar, sizeof(Abar));
-  if(megbbinit() != DONE)
-    megbb_r(tail, 0, rbar, BACKWARD);
+  if(megbbinit() != DONE){
+    printState();
+    megbb_r2(tail);//, BACKWARD);
+
+  }
   else
     printf("early done!");
+  
   printState();
   printAnswer();
   return (0);
 }
 
-
-
-
 /*
+int r = rbar;
 void megbb(void){
 
   //given the number of nodes, this give number of elements in the complete graph, 
@@ -626,7 +705,8 @@ void megbb(void){
 	  t++;
 	} 
       else 
-	{  
+	{ 
+	  //kprime = k;
 	  k ++; //examine k+1 ... n edges after restoring edge k
 	  while(k < max_edges)
 	    {
@@ -676,7 +756,7 @@ void megbb(void){
 	  if(updateOptimumSoln(r) == DONE)
 	    return;
 	}
-      
+      //k = kprime - 1;
       
     }
 
@@ -684,4 +764,5 @@ void megbb(void){
 
   return;
 }
+
 */
