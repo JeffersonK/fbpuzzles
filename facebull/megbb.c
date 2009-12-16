@@ -35,6 +35,8 @@ int sumS;//sum of edge weights for edges in S
 //Ebar is the set of edges that have been deleted from E
 int nEbar;//cardinality of Ebar
 int sumEbar;//sum of edge weights in Ebar, we want to maximize this in our solution
+
+int nEbarprime;
 int sumEbarprime;//current max sum of edges we can delete
 
 #define INSERT_EBAR(m) m->edgeset=EBAR_EDGE;sumEbar+=m->edgecost;nEbar++;Vout[m->ci]--;Vin[m->cj]--
@@ -344,7 +346,8 @@ void printAnswer(void){
 void updateOptimumSoln(int ebar){
   
   machine_t * p = EdgesAdjHead;
-  sumEbarprime = ebar;
+  sumEbarprime = sumEbar;
+  nEbarprime = nEbar;
   while (p != NULL){
     if (p->edgeset == E_EDGE)
       p->inAbar = 1;
@@ -575,10 +578,6 @@ void megbb_r(machine_t * k, int direction){
   return;
 }
 
-void forward(machine_t *k){
-
-
-}
 
 void megbb_r2(machine_t * k){
 
@@ -658,7 +657,8 @@ int main(int argc, char ** argv){
 
   if(megbbinit() != DONE){
     printState();
-    megbb_r2(tail);//, BACKWARD);
+    megbb();
+    //megbb_r2(tail);//, BACKWARD);
 
   }
   else
@@ -669,30 +669,33 @@ int main(int argc, char ** argv){
   return (0);
 }
 
-/*
-int r = rbar;
 void megbb(void){
 
   //given the number of nodes, this give number of elements in the complete graph, 
   //or the adjacency matrix, we can optimize this later and better represent the,
   //rows as linked lists which will save memory and time
   int i;
-  int k, kprime, t;//t is cardinality of set S 
+  int k, kmin, t = 0;//t is cardinality of set S 
   int path_existed;
 
+  int rbar = nEbar;
+  int r = rbar;
+  int max_edges = nNodes*nNodes;//don't need this when we get rid of matrix
   if (r == 0)//we couldn't delete any edges 
     return;
-  
-  t = 0;  
-  max_edges = nNodes*nNodes;//don't need this when we get rid of matrix
-  k = kprime = max_edges - 1;
+
+  k = kmin = max_edges - 1;
   while(k >= 0){
     if (A[ROWI(k)][COLJ(k)].edgeset == NO_EDGE){
       k--;
+      if (k < kmin)
+	kmin = k;
     }
     else if(A[ROWI(k)][COLJ(k)].edgeset == E_EDGE){
       t++;
       k--;
+      if (k < kmin)
+	kmin = k;
     }
     else {//it's an edge we previously deleted, try forward move
       A[ROWI(k)][COLJ(k)].edgeset = E_EDGE;
@@ -744,8 +747,8 @@ void megbb(void){
 		  
 		  if ( (t - (nNodes-ROWI(k))) == 0)
 		    {
-		      if(updateOptimumSoln(r) == DONE)
-			return;
+		      updateOptimumSoln(r);// == DONE)
+		      return;
 		      break;
 		    }   		
 		}
@@ -753,16 +756,21 @@ void megbb(void){
 	      k++;
 	    }//while (k < max_edges)
 	  
-	  if(updateOptimumSoln(r) == DONE)
-	    return;
+	  
+	  if(r > rbar)
+	    updateOptimumSoln(r);
 	}
       //k = kprime - 1;
       
     }
 
+    //if (k == kmin){
+    // k--;
+    //  kmin = k;
+    //}
+    printf("k(%d) ", k);
   }//while (k > 0)
 
+  printf("rabar is %d\n", rbar);
   return;
 }
-
-*/
