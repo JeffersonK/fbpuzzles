@@ -4,10 +4,9 @@
 #include <math.h> //for INFINITY
 
 #define DEBUG_LOADFILE 0
-#define DEBUG_MEGBB 1
-#define WITH_PRUNING 1
-#define DEBUG_PRUNING 1
-
+//#define DEBUG_MEGBB 1
+//#define WITH_PRUNING 1
+//#define DEBUG_PRUNING 1
 
 //#define INF ((2^31)-1)
 #define MAX_NODES (128)
@@ -15,15 +14,14 @@
 #define MAX_NAME_LEN (8)
 
 typedef struct MACHINE_T {
-  short mark;
-  short predecessor;
-  float minpathcost;  
-  short crossed;
-  //short edgeset;//which edge set its part of {NO_EDGE, E_EDGE, EBAR_EDGE}
+  //short mark;
+  //short predecessor;
+  //float minpathcost;  
+  ////////////
+  float edgecost; 
   short edgeRealName;
-  //short edgelabel;//label k: for k in [0 ... n-1]
-  short inAbar; //whether edge is part of optimal solution or not
-  float edgecost;
+  short crossed;
+  short inAbar; //whether edge is part of optimal solution or not 
   short ci;
   short cj;
   struct MACHINE_T * adjNext;
@@ -31,11 +29,17 @@ typedef struct MACHINE_T {
   struct MACHINE_T * kthNext;//pointer to next highest edge weight
   struct MACHINE_T * nameNext;//pointer to next highest edge weight
 } machine_t;
+//machine_t A[MAX_NODES][MAX_NODES];
 
-machine_t A[MAX_NODES][MAX_NODES];
+typedef struct COMPOUND_T {
+  short mark;
+  short predecessor;
+  float minpathcost;  
+  machine_t * m;
+  //struct COMPOUND_T * predecessor;
+} compound_t;
+compound_t A[MAX_NODES][MAX_NODES];
 
-#define BACKWARD 0
-#define FORWARD 1
 
 #define DONE (99)
 #define NOT_DONE (0)
@@ -46,29 +50,7 @@ float best;
 short visited[MAX_NODES];
 float graphWeight;
 
-int nS;//cardinality of edges in S, where S is set of edges for i >= k in E
-int sumS;//sum of edge weights for edges in S
-
-//Ebar is the set of edges that have been deleted from E
-int nEbar;//cardinality of Ebar
-int sumEbar;//sum of edge weights in Ebar, we want to maximize this in our solution
-
-//current bests
-int nEbarprime;//current number of edges in Ebarprime
-int sumEbarprime;//current max sum of edge weights we can delete
-
-//#define NO_EDGE ( (short) 0)
-//#define E_EDGE ( (short) 1)
-//#define EBAR_EDGE ( (short)-1)
-//#define INSERT_EBAR(m) m->edgeset=EBAR_EDGE;sumEbar+=m->edgecost;nEbar++;Vout[m->ci]--;Vin[m->cj]--
-//#define INSERT_E(m) m->edgeset=E_EDGE;sumEbar-=m->edgecost;nEbar--;Vout[m->ci]++;Vin[m->cj]++
-//#define INSERT_S(m) nS++;sumS+=m->edgecost
-//#define REMOVE_S(m) nS--;sumS-=m->edgecost
-//#define EDGE_IN_E(m) (m->edgeset == E_EDGE)
-//#define EDGE_IN_EBAR(m) (m->edgeset == EBAR_EDGE)
-
 #define CALCK(i,j) (i*nNodes + j)
-
 
 machine_t * EdgesAdjHead = NULL;//replaces the adjaceny matrix
 machine_t * EdgesNameHead = NULL;//edges sorted by real name (machine name)
@@ -79,6 +61,25 @@ short compoundIndex[MAX_NODES];
 short nNodes = 0;
 short nEdges = 0;
 
+//#define BACKWARD 0
+//#define FORWARD 1
+//int nS;//cardinality of edges in S, where S is set of edges for i >= k in E
+//int sumS;//sum of edge weights for edges in S
+//Ebar is the set of edges that have been deleted from E
+//int nEbar;//cardinality of Ebar
+//int sumEbar;//sum of edge weights in Ebar, we want to maximize this in our solution
+//current bests
+//int nEbarprime;//current number of edges in Ebarprime
+//int sumEbarprime;//current max sum of edge weights we can delete
+//#define NO_EDGE ( (short) 0)
+//#define E_EDGE ( (short) 1)
+//#define EBAR_EDGE ( (short)-1)
+//#define INSERT_EBAR(m) m->edgeset=EBAR_EDGE;sumEbar+=m->edgecost;nEbar++;Vout[m->ci]--;Vin[m->cj]--
+//#define INSERT_E(m) m->edgeset=E_EDGE;sumEbar-=m->edgecost;nEbar--;Vout[m->ci]++;Vin[m->cj]++
+//#define INSERT_S(m) nS++;sumS+=m->edgecost
+//#define REMOVE_S(m) nS--;sumS-=m->edgecost
+//#define EDGE_IN_E(m) (m->edgeset == E_EDGE)
+//#define EDGE_IN_EBAR(m) (m->edgeset == EBAR_EDGE)
 /*
 #define ROWI(k) (k / nNodes)
 #define COLJ(k) (k % nNodes)
@@ -96,8 +97,8 @@ short nEdges = 0;
  ****/   
 void printMachine(machine_t * m){
   fprintf(stderr, "Machine:%hi (@%p)\n", m->edgeRealName, m);
-  fprintf(stderr, "\tminpathcost:%.0f\n", m->minpathcost);
-  fprintf(stderr, "\tpredecessor:%d\n", m->predecessor);
+  //fprintf(stderr, "\tminpathcost:%.0f\n", m->minpathcost);
+  //fprintf(stderr, "\tpredecessor:%d\n", m->predecessor);
   //fprintf(stderr, "\tedgeset:%d\n", m->edgeset);
   fprintf(stderr, "\tedgecost:%.0f\n", m->edgecost);
   fprintf(stderr, "\trow:%hi\n", m->ci);
@@ -153,6 +154,22 @@ void printEdgeAdj(void){
   }
   printMachine(ptr);
   fprintf(stderr, "ptr:%p EdgesAdjHead:%p\n", ptr, EdgesAdjHead);
+}
+
+void printpath(int x,int i)
+{
+  printf("\n");
+  if(i==x)
+    {
+      printf("%d",x);
+    }
+  else if(A[x][i].predecessor==-1)
+    printf("no path from %d to %d",x,i);
+  else
+    {
+      printpath(x,A[x][i].predecessor);
+      printf("..%d",i);
+    }
 }
 
 
@@ -352,12 +369,22 @@ int loadFile(char * filename) {
   for(u=0; u<MAX_NODES; u++)
     for(v=0; v<MAX_NODES; v++)
       {
+	/*
 	if (u == v)
 	  A[u][v].edgecost = 0;
 	else
 	  A[u][v].edgecost = INFINITY;
-	
-	A[u][v].inAbar = 0;
+	*/
+	if (u == v)
+	  A[u][v].minpathcost = INFINITY;
+	else
+	  A[u][v].minpathcost = 0;
+	A[u][v].predecessor = -1;
+	A[u][v].mark = 0;
+	A[u][v].m = NULL;
+	//A[u][v].edgeRealNmae = -1;
+	//A[u][v].inAbar = 0;
+
       }
   graphWeight = 0;
   memset(compoundIndex, 0xff, sizeof(compoundIndex));
@@ -394,27 +421,26 @@ int loadFile(char * filename) {
     if (nEdges >= MAX_EDGES)
       return MEMORY_OVERFLOW;
 
-    //ptr = (machine_t*) malloc(sizeof(machine_t));  
-    //if (ptr == NULL)
-    //return MEMORY_OVERFLOW;
-    ptr = &A[uindex][vindex];
+    ptr = (machine_t*) malloc(sizeof(machine_t));  
+    if (ptr == NULL)
+      return MEMORY_OVERFLOW;
+    //ptr = &A[uindex][vindex];    
     memset((void *) ptr, 0x0, sizeof(machine_t));
-    ptr->mark = 0;
-    ptr->predecessor = -1;
+    //ptr->mark = 0;
+    //ptr->predecessor = -1;
     ptr->crossed = 0;
     ptr->inAbar = 1;
     ptr->edgeRealName = machIntName;
     ptr->ci = uindex;
     ptr->cj = vindex;
     ptr->edgecost = (float)cost;
-    
     graphWeight += (int) cost;
-    
+    A[uindex][vindex].m = ptr;
+
     insertEdgeAdj(ptr);
     insertEdgeName(ptr);
     insertEdgeCost(ptr);
     nEdges ++;
-
   }	
   best = graphWeight;
   fclose(f);
@@ -443,7 +469,7 @@ void updateOptimumSoln(float ebar){
  *
  *
  *****/
-int minimum(machine_t *m,int k)
+int minimum(compound_t *m,int k)
 {
   float mi=INFINITY;
   int i,t=-1;
@@ -462,25 +488,25 @@ int minimum(machine_t *m,int k)
 #if DEBUG_ASSERT
   assert(t >= 0);
 #endif
-
   return t;
 }
 
 
 void dijkstra_single_source_shortest_paths(int source){
   int i, count, u;
+  float edgecost = INFINITY;
   for(i=0;i<nNodes;i++)
     {
       A[source][i].mark=0;
       A[source][i].minpathcost = INFINITY;
-      A[source][i].predecessor=-1;
+      A[source][i].predecessor = -1;
     }
   A[source][source].minpathcost = 0;
 
   count = 0;
   while(count<nNodes)
     {
-      u=minimum((machine_t *)&A[source][0],nNodes);
+      u=minimum((compound_t *)&A[source][0],nNodes);
       count++;
       A[source][u].mark=1;
 #if DEBUG_ASSERT
@@ -490,16 +516,23 @@ void dijkstra_single_source_shortest_paths(int source){
       for(i=0;i<nNodes;i++)
         {
           //printf("u=%d\ti=%d\tgraph[u][i]=%d\tmark[i]=%d\n", u, i, graph[u][i], mark[i]);
-          if(A[u][i].edgecost > 0)
+	  if(A[u][i].m == NULL)
+	    edgecost = INFINITY;
+	  else if(u == i)
+	    edgecost = 0;
+	  else
+	    edgecost = A[u][i].m->edgecost;
+	  
+          if(/*A[u][i].*/edgecost > 0)
             {
               if(A[source][i].mark!=1)
                 {
+		  
                   //printf("pathestimate[i]=%d\tpathestime[u]=%d\n", pathestimate[i], pathestimate[u]);
-                  if(A[source][i].minpathcost > (A[source][u].minpathcost + A[u][i].edgecost))
+                  if(A[source][i].minpathcost > (A[source][u].minpathcost + edgecost /*A[u][i].edgecost*/))
                     {
-
                       //printf(".");
-                      A[source][i].minpathcost = A[source][u].minpathcost + A[u][i].edgecost;
+                      A[source][i].minpathcost = A[source][u].minpathcost + /*A[u][i].*/edgecost;
                       A[source][i].predecessor=u;
                     }
                 }
@@ -515,9 +548,11 @@ float getMarginalPathCost(int u, int v)
 {
   if(u==v) return 0.0;
  
-  if (A[A[u][v].predecessor][v].crossed == 0)
-    return A[A[u][v].predecessor][v].edgecost + getMarginalPathCost(u, A[u][v].predecessor);
-  
+  //  if (A[A[u][v].predecessor][v].crossed == 0)
+  if (A[A[u][v].predecessor][v].m->crossed == 0)
+    return A[A[u][v].predecessor][v].m->edgecost + getMarginalPathCost(u, A[u][v].predecessor);
+  //return A[A[u][v].predecessor][v].edgecost + getMarginalPathCost(u, A[u][v].predecessor);
+   
   return getMarginalPathCost(u, A[u][v].predecessor);  
 }
 
@@ -533,7 +568,8 @@ void incCrossedEdges(int u, int v){
   assert(A[u][v].predecessor>=0 && A[u][v].predecessor<nNodes);
 #endif
   visited[v]++;
-  A[A[u][v].predecessor][v].crossed++;
+  //A[A[u][v].predecessor][v].crossed++;
+  A[A[u][v].predecessor][v].m->crossed++;
   incCrossedEdges(u, A[u][v].predecessor);
 }
 
@@ -549,24 +585,9 @@ void decCrossedEdges(int u, int v){
   assert(A[u][v].predecessor>=0 && A[u][v].predecessor<nNodes);
 #endif
   visited[v]--;
-  A[A[u][v].predecessor][v].crossed--;
+  //A[A[u][v].predecessor][v].crossed--;
+  A[A[u][v].predecessor][v].m->crossed--;
   decCrossedEdges(u, A[u][v].predecessor);
-}
-
-void printpath(int x,int i)
-{
-  printf("\n");
-  if(i==x)
-    {
-      printf("%d",x);
-    }
-  else if(A[x][i].predecessor==-1)
-    printf("no path from %d to %d",x,i);
-  else
-    {
-      printpath(x,A[x][i].predecessor);
-      printf("..%d",i);
-    }
 }
 
 
@@ -598,7 +619,6 @@ void walk(int node, float totCost) {
       incCrossedEdges(node, startNode);
       updateOptimumSoln(totCost);
       decCrossedEdges(node, startNode);
-
     }//update best 
 
   }//(if(end)
@@ -631,9 +651,8 @@ int main(int argc, char ** argv){
   if (nEdges == nNodes){
     //must be hamiltonian cycle if it is strongly connected
     //and problem statement said that we could assume it was
-    //updateOptimumSoln(graphWeight);
     printAnswer();
-    return DONE;
+    goto done;
   }
 
   for(i=0; i<nNodes; i++)
@@ -650,11 +669,11 @@ int main(int argc, char ** argv){
 
   printAnswer();
 
-//  done:
+ done:
   //cleanup for good form
-  //freeEdges(EdgesAdjHead);
+  freeEdges(EdgesAdjHead);
   EdgesAdjHead = EdgesNameHead = EdgesCostHead = NULL;
-
+  
   return (0);
 }
 
