@@ -1,204 +1,200 @@
-
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
-#include <math.h>
+#include <string.h> //for bzero()
+#include <math.h> //for INFINITY
 
-#define DEBUG 0
-#define DEBUG_ASSERT 0
 #define DEBUG_LOADFILE 0
-#define DEBUG_ADJMATRIX 0
-#define DEBUG_DIJKSTRA 0
-#define DEBUG_MACHINELIST 0
-#define DEBUG_PROGRESS 0
+#define DEBUG_MEGBB 1
+#define WITH_PRUNING 1
+#define DEBUG_PRUNING 1
 
-#define INFINITY (HUGE_VAL)
 
-#define MAX_NODES 256
-#define MAX_EDGES 2048
-#define MAX_NAME_LEN 8
+//#define INF ((2^31)-1)
+#define MAX_NODES (128)
+#define MAX_EDGES (MAX_NODES*MAX_NODES) //number of elements in adjacency matrix (we can do better than this with a linked lists
+#define MAX_NAME_LEN (8)
 
-#if DEBUG_ASSERT
-#include <assert.h>
-#endif
-
-typedef struct {
-  short machIndex;
-  float edgecost;
-  float minpathcost;
-  short crossed;
+typedef struct MACHINE_T {
+  short mark;
   short predecessor;
+  float minpathcost;  
+  short crossed;
+  //short edgeset;//which edge set its part of {NO_EDGE, E_EDGE, EBAR_EDGE}
+  short edgeRealName;
+  //short edgelabel;//label k: for k in [0 ... n-1]
+  short inAbar; //whether edge is part of optimal solution or not
+  float edgecost;
+  short ci;
+  short cj;
+  struct MACHINE_T * adjNext;
+  struct MACHINE_T * adjPrev;	
+  struct MACHINE_T * kthNext;//pointer to next highest edge weight
+  struct MACHINE_T * nameNext;//pointer to next highest edge weight
 } machine_t;
 
-short machineIndex[MAX_EDGES];
+machine_t A[MAX_NODES][MAX_NODES];
+
+#define BACKWARD 0
+#define FORWARD 1
+
+#define DONE (99)
+#define NOT_DONE (0)
+#define MEMORY_OVERFLOW (-666)
+
+short startNode;
+float best;
+short visited[MAX_NODES];
+float graphWeight;
+
+int nS;//cardinality of edges in S, where S is set of edges for i >= k in E
+int sumS;//sum of edge weights for edges in S
+
+//Ebar is the set of edges that have been deleted from E
+int nEbar;//cardinality of Ebar
+int sumEbar;//sum of edge weights in Ebar, we want to maximize this in our solution
+
+//current bests
+int nEbarprime;//current number of edges in Ebarprime
+int sumEbarprime;//current max sum of edge weights we can delete
+
+//#define NO_EDGE ( (short) 0)
+//#define E_EDGE ( (short) 1)
+//#define EBAR_EDGE ( (short)-1)
+//#define INSERT_EBAR(m) m->edgeset=EBAR_EDGE;sumEbar+=m->edgecost;nEbar++;Vout[m->ci]--;Vin[m->cj]--
+//#define INSERT_E(m) m->edgeset=E_EDGE;sumEbar-=m->edgecost;nEbar--;Vout[m->ci]++;Vin[m->cj]++
+//#define INSERT_S(m) nS++;sumS+=m->edgecost
+//#define REMOVE_S(m) nS--;sumS-=m->edgecost
+//#define EDGE_IN_E(m) (m->edgeset == E_EDGE)
+//#define EDGE_IN_EBAR(m) (m->edgeset == EBAR_EDGE)
+
+#define CALCK(i,j) (i*nNodes + j)
+
+
+machine_t * EdgesAdjHead = NULL;//replaces the adjaceny matrix
+machine_t * EdgesNameHead = NULL;//edges sorted by real name (machine name)
+machine_t * EdgesCostHead = NULL;//edges sorted in decreasing weight
+
 short compoundIndex[MAX_NODES];
-machine_t adjMatrix[MAX_NODES][MAX_NODES];
-float best; //lowest cost
-char visited[MAX_NODES];
-short startNode; //nodes we started from
-short nNodes = 0, nEdges = 0;
-short bestMachineList[MAX_EDGES];
-short curMachineList[MAX_EDGES];
 
-void printAdjMatrix(void) {
-  
-  int i, j;
-  for (i=0; i < nNodes; i++) {
-    for (j=0; j < nNodes; j++) {
-      printf("%0.2lf(%0.2f) ", 
-	     adjMatrix[i][j].edgecost,
-	     adjMatrix[i][j].minpathcost);
-    }
-    printf("\n");
+short nNodes = 0;
+short nEdges = 0;
+
+/*
+#define ROWI(k) (k / nNodes)
+#define COLJ(k) (k % nNodes)
+#define KTH_EDGE(k) (A[ROWI(k)][COLJ(k)])
+*/
+
+/*************************
+ *
+ * DEBUG FUNCTIONS
+ *
+ ************************/
+
+/****
+ *
+ ****/   
+void printMachine(machine_t * m){
+  fprintf(stderr, "Machine:%hi (@%p)\n", m->edgeRealName, m);
+  fprintf(stderr, "\tminpathcost:%.0f\n", m->minpathcost);
+  fprintf(stderr, "\tpredecessor:%d\n", m->predecessor);
+  //fprintf(stderr, "\tedgeset:%d\n", m->edgeset);
+  fprintf(stderr, "\tedgecost:%.0f\n", m->edgecost);
+  fprintf(stderr, "\trow:%hi\n", m->ci);
+  fprintf(stderr, "\tcol: %hi\n", m->cj);
+  fprintf(stderr, "\tadjPrev: @%p\n", m->adjPrev);
+  fprintf(stderr, "\tadjNext: @%p\n", m->adjNext);
+  fprintf(stderr, "\tkthNext: @%p\n", m->kthNext);
+  fprintf(stderr, "\tnameNext: @%p\n", m->nameNext);
+}
+
+/****
+ *
+ ****/   
+void printEdgeNames(void){
+  machine_t * m = EdgesNameHead;
+  fprintf(stderr, " *** Edge Names (Asc Order) ***\n");
+  while(m != NULL){
+    printMachine(m);
+    m = m->nameNext;
   }
-  
 }
 
-float getMarginalPathCost(int u, int v)
-{
-  if(u==v) return 0.0;
- 
-  if (adjMatrix[adjMatrix[u][v].predecessor][v].crossed == 0)
-    return adjMatrix[adjMatrix[u][v].predecessor][v].edgecost + getMarginalPathCost(u, adjMatrix[u][v].predecessor);
-  
-  return getMarginalPathCost(u, adjMatrix[u][v].predecessor);  
+/****
+ *
+ ****/   
+void printEdgeWeights(void){
+  machine_t * m = EdgesCostHead;
+  fprintf(stderr, " *** Edge Weights (Desc Order) ***\n");
+  while(m != NULL){
+    printMachine(m);
+    m = m->kthNext;
+  }
 }
 
-void incCrossedEdges(int u, int v){
+/****
+ *
+ ****/   
+void printEdgeAdj(void){
+  machine_t * ptr;
+  ptr = EdgesAdjHead;
+  fprintf(stderr, " *** Edge Adj List ***\n");
+  fprintf(stderr, "\t*** FORWARDS ***\n");
+  while(ptr->adjNext != NULL){
+    printMachine(ptr);
+    ptr = ptr->adjNext;
+  }
+  printMachine(ptr);
 
-  if (u == v) return;
-
-#if DEBUG_ASSERT
-  assert(u>=0 && u<nNodes);
-  assert(v>=0 && v<nNodes);
-  assert(adjMatrix[u][v].predecessor>=0 && adjMatrix[u][v].predecessor<nNodes);
-#endif
-
-  adjMatrix[adjMatrix[u][v].predecessor][v].crossed++;
-  curMachineList[adjMatrix[adjMatrix[u][v].predecessor][v].machIndex]++;
-  //printf("+%d ", adjMatrix[adjMatrix[u][v].predecessor][v].name);
-  incCrossedEdges(u, adjMatrix[u][v].predecessor);
+  fprintf(stderr, "\t*** REVERSE ***\n");
+  while(ptr->adjPrev != NULL){
+    printMachine(ptr);
+    ptr = ptr->adjPrev;
+  }
+  printMachine(ptr);
+  fprintf(stderr, "ptr:%p EdgesAdjHead:%p\n", ptr, EdgesAdjHead);
 }
 
-void decCrossedEdges(int u, int v){
 
-  if (u == v) return;
-
-#if DEBUG_ASSERT
-  assert(u>=0 && u<nNodes);
-  assert(v>=0 && v<nNodes);
-  assert(adjMatrix[u][v].predecessor>=0 && adjMatrix[u][v].predecessor<nNodes);
-#endif
-
-  adjMatrix[adjMatrix[u][v].predecessor][v].crossed--;
-  curMachineList[adjMatrix[adjMatrix[u][v].predecessor][v].machIndex]--;
-  //printf("-%d ", adjMatrix[adjMatrix[u][v].predecessor][v].name);
-  decCrossedEdges(u, adjMatrix[u][v].predecessor);
+void printMinPaths(void){
+  int i, j;
+  fprintf(stderr, "*** MIN PATHS ***\n");
+  for(i=0; i<nNodes; i++){
+    for(j=0; j<nNodes; j++)
+      fprintf(stderr, "%04.0f\t", A[i][j].minpathcost);
+    fprintf(stderr, "\n");
+  }
 }
+/*************************
+ *
+ * HELPER FUNCTIONS
+ *
+ ************************/
 
-void printpath(int x,int i)
-{
-  printf("\n");
-  if(i==x)
-    {
-      printf("%d",x);
-    }
-  else if(adjMatrix[x][i].predecessor==-1)
-    printf("no path from %d to %d",x,i);
-  else
-    {
-      printpath(x,adjMatrix[x][i].predecessor);
-      printf("..%d",i);
-    }
-}
-
-int minimum(machine_t *m,int k)
-{
-  float mi=INFINITY;
-  int i,t=-1;
-  for(i=0;i<k;i++)
-    {
-      if(m[i].crossed!=1)
-	{
-	  if(mi>=m[i].minpathcost)
-	    {
-	      mi=m[i].minpathcost;
-	      t=i;
-	    }
-	}
-    }
-
-#if DEBUG_ASSERT
-  assert(t >= 0);
-#endif
-
-  return t;
-}
-
-void dijkstra_single_source_shortest_paths(int source){
-  int i, count, u;
-  for(i=0;i<nNodes;i++)
-    {
-      adjMatrix[source][i].crossed=0;
-      //adjMatrix[source][i].minpathcost should already be initialized
-      adjMatrix[source][i].predecessor=-1;
-    }
-  adjMatrix[source][source].minpathcost = 0;
-  
-  count = 0;
-  while(count<nNodes)
-    {
-      u=minimum((machine_t *)&adjMatrix[source],nNodes);
-      count++;
-      adjMatrix[source][u].crossed=1;
-#if DEBUG_ASSERT
-      assert(source >= 0 && source < nNodes);
-      assert(u>=0 && u < nNodes);
-#endif
-      for(i=0;i<nNodes;i++)
-	{
-	  //printf("u=%d\ti=%d\tgraph[u][i]=%d\tmark[i]=%d\n", u, i, graph[u][i], mark[i]);
-	  if(adjMatrix[u][i].minpathcost > 0)
-	    {
-	      if(adjMatrix[source][i].crossed!=1)
-		{
-		  //printf("pathestimate[i]=%d\tpathestime[u]=%d\n", pathestimate[i], pathestimate[u]);
-		  if(adjMatrix[source][i].minpathcost > (adjMatrix[source][u].minpathcost + adjMatrix[u][i].edgecost))
-		    {
-		   
-		      //printf(".");
-		      adjMatrix[source][i].minpathcost = adjMatrix[source][u].minpathcost + adjMatrix[u][i].edgecost;
-		      adjMatrix[source][i].predecessor=u;
-		    }
-		}
-	    }
-	}
-    }
-
+/****
+ *
+ ****/   
+void freeEdges(machine_t * m){
+  if (m == NULL)
+    return;  
+  //free everyone after you
+  freeEdges(m->adjNext);
+  //clear him out for good measure, we might get this reallocated to us later
+  bzero(m, sizeof(machine_t));
+  //free yourself
+  free(m);
   return;
 }
 
-/*
-short name2index(short name, short * list, int len){
-
-  int i;
-
-  for (i = 0; i < len; i++)
-    if (name == list[i])
-      return i;
-
-  return -1;
-  }*/
-
-#define MEMORY_OVERFLOW -666
+/****
+ *
+ ****/   
 short insert2index(short name, short * list, short * listlen, int maxlen){
   int i;
-
   for(i=0; i < *listlen; i++){
     if(list[i] == name)
       return i; //already exists
   }
-
   if(*listlen < maxlen){
     list[*listlen] = name;
     *listlen += 1;
@@ -207,34 +203,165 @@ short insert2index(short name, short * list, short * listlen, int maxlen){
   return MEMORY_OVERFLOW;
 }
 
+/****
+ *
+ * insert from highest to lowest
+ *
+ ****/   
+int insertEdgeCost(machine_t * m){
+  machine_t * ptr, * last;
+  last = NULL;
+  m->kthNext = NULL;  
+  if (EdgesCostHead == NULL){
+    EdgesCostHead = m;
+    return (0);
+  }
+  ptr = EdgesCostHead;
+  while (ptr != NULL) 
+    {
+      if (ptr->edgecost < m->edgecost){
+	//insert to left
+	m->kthNext = ptr;
+	if (ptr == EdgesCostHead)
+	  EdgesCostHead = m;
+	else
+	  last->kthNext = m;
+	return (0);
+      } 
+      last = ptr;
+      ptr = ptr->kthNext;
+    }
+  last->kthNext = m;
+  return (0);
+}
+
+
+/****
+ *
+ * insert from lowest to highest
+ * TODO: combine with insertEdgeCost()
+ ****/   
+int insertEdgeName(machine_t * m){
+  machine_t * ptr, * last;
+  last = NULL;
+  m->nameNext = NULL;  
+  if (EdgesNameHead == NULL){
+    EdgesNameHead = m;
+    return (0);
+  }
+  ptr = EdgesNameHead;
+  while (ptr != NULL) 
+    {
+      if (ptr->edgeRealName > m->edgeRealName){
+	//insert to left
+	m->nameNext = ptr;
+	if (ptr == EdgesNameHead)
+	  EdgesNameHead = m;
+	else
+	  last->nameNext = m;
+	return (0);
+      } 
+      last = ptr;
+      ptr = ptr->nameNext;
+    }
+  last->nameNext = m;
+  return (0);
+}
+
+/***
+ *
+ ***/  
+int insertEdgeAdj(machine_t * m) {
+  machine_t * ptr;
+  m->adjNext = m->adjPrev = NULL;	
+  if (EdgesAdjHead == NULL)
+    {
+      EdgesAdjHead = m;
+      return (0);
+    }
+  ptr = EdgesAdjHead;	
+  while( (ptr->adjNext != NULL) && (CALCK(ptr->ci,ptr->cj) < CALCK(m->ci,m->cj)) )
+    ptr = ptr->adjNext;
+
+  if(CALCK(ptr->ci, ptr->cj) ==  CALCK(m->ci,m->cj)){
+    fprintf(stderr, "Duplicate Edge.\n");
+    return -1;
+  }
+
+  if(CALCK(ptr->ci, ptr->cj) > CALCK(m->ci,m->cj)){
+    //insert before ptr
+    m->adjNext = ptr;
+    m->adjPrev = ptr->adjPrev;//NULL
+    ptr->adjPrev = m;
+    if(ptr == EdgesAdjHead && ptr->adjPrev == NULL){
+      EdgesAdjHead = m;
+    }  else
+      m->adjPrev->adjNext = m;
+    if(ptr == EdgesAdjHead && ptr->adjPrev != NULL){
+      fprintf(stderr, "invariant broken %d\n", __LINE__);
+      return -1;
+    }	
+    return (0);
+  }
+  //insert after ptr
+  m->adjPrev = ptr;
+  m->adjNext = ptr->adjNext;
+  if (ptr->adjNext != NULL)
+    ptr->adjNext->adjPrev = m;
+  ptr->adjNext = m;
+  return (0);
+}
+
+/****
+ *
+ *
+ ****/
+void printAnswer(void){
+  machine_t * p = EdgesNameHead;
+  int first = 1;
+  //printf("%d\n", graphWeight - sumEbarprime);  
+  printf("%.0f\n", best);  
+  while (p != NULL){
+    if (p->inAbar){
+      if (first){
+	first = 0;		
+	printf("%hi", p->edgeRealName);		
+      } else
+	printf(" %hi", p->edgeRealName);		
+    }
+    p = p->nameNext;
+  }
+  printf("\n");
+}
+
+/****
+ *
+ *
+ ****/
 int loadFile(char * filename) {
 
   FILE * f = NULL;
   char compoundA[MAX_NAME_LEN];
   char compoundB[MAX_NAME_LEN];
   char machineName[MAX_NAME_LEN];
-  int i, j, u, uindex, v, vindex, machIntName, machIndex;
+  int u, uindex, v, vindex;
+  short machIntName;
   int cost;
-  
-  best = INFINITY;
+  machine_t * ptr; 
 
-  memset(machineIndex, 0xff, sizeof(machineIndex));
+  for(u=0; u<MAX_NODES; u++)
+    for(v=0; v<MAX_NODES; v++)
+      {
+	if (u == v)
+	  A[u][v].edgecost = 0;
+	else
+	  A[u][v].edgecost = INFINITY;
+	
+	A[u][v].inAbar = 0;
+      }
+  graphWeight = 0;
   memset(compoundIndex, 0xff, sizeof(compoundIndex));
 
-  /* initialize the matrix */
-  for (i=0; i<MAX_NODES; i++)
-    for (j=0; j<MAX_NODES; j++){
-      if (i == j) {
-	adjMatrix[i][j].edgecost = adjMatrix[i][j].minpathcost = 0;
-	
-      } else {
-	adjMatrix[i][j].edgecost = INFINITY;
-	adjMatrix[i][j].minpathcost = INFINITY;
-      }
-      adjMatrix[i][j].crossed = 0;
-      adjMatrix[i][j].machIndex = -1;//the index in the machineList where the real name is stored
-  }
-  
   f = fopen(filename, "r");
   if (f == NULL)
     return -1;
@@ -246,90 +373,213 @@ int loadFile(char * filename) {
 		compoundB,
 		&cost) == 4){
 
-    //this assumes that if the first machine has a name of 0
-    //there will be compounds with name 0
-    //in the specification of the problem we don't have to handle
-    //this but it is useful for testing
-    machIntName = atoi(machineName+1);
-    //if(nEdges == 0)
-    //  machIdShift = machId;
-    
-    if((machIndex=insert2index(machIntName, machineIndex, &nEdges, MAX_EDGES)) < 0){
-      return MEMORY_OVERFLOW;//we ran out of memory allocated
-    }
-    if (machIndex+1 != nEdges)
-      return -5;//this means we had a duplicate machine name
-
+    machIntName = (short) atoi(machineName+1);
     u = atoi(compoundA+1);
     if( (uindex=insert2index(u, compoundIndex, &nNodes, MAX_NODES)) == MEMORY_OVERFLOW){
       return MEMORY_OVERFLOW;//ran out of memory allocated
     }
+
     v = atoi(compoundB+1);
     if((vindex=insert2index(v, compoundIndex, &nNodes, MAX_NODES)) == MEMORY_OVERFLOW){
       return MEMORY_OVERFLOW;//ran out of memory allocated
     }
 
 #if DEBUG_LOADFILE
-    printf("add (M(%d=>%d) C(%d=>%d) C(%d=>%d) %d\n", machIntName, machIndex, u, uindex, v, vindex, cost);
+    fprintf(stderr, "add (M(%d) C(%d=>%d) C(%d=>%d) %d\n", machIntName, u, uindex, v, vindex, cost);
 #endif
 
-    //if (u > max) max = u;
-    //if (v > max) max = v;
-    adjMatrix[u][v].machIndex = machIndex;
-    adjMatrix[u][v].edgecost = (float) cost;
-    //nEdges ++;
-  }
-  //nNodes = max+1;//the highest compound we see is the max
+    if (nNodes >= MAX_NODES)
+      return MEMORY_OVERFLOW;
 
+    if (nEdges >= MAX_EDGES)
+      return MEMORY_OVERFLOW;
+
+    //ptr = (machine_t*) malloc(sizeof(machine_t));  
+    //if (ptr == NULL)
+    //return MEMORY_OVERFLOW;
+    ptr = &A[uindex][vindex];
+    memset((void *) ptr, 0x0, sizeof(machine_t));
+    ptr->mark = 0;
+    ptr->predecessor = -1;
+    ptr->crossed = 0;
+    ptr->inAbar = 1;
+    ptr->edgeRealName = machIntName;
+    ptr->ci = uindex;
+    ptr->cj = vindex;
+    ptr->edgecost = (float)cost;
+    
+    graphWeight += (int) cost;
+    
+    insertEdgeAdj(ptr);
+    insertEdgeName(ptr);
+    insertEdgeCost(ptr);
+    nEdges ++;
+
+  }	
+  best = graphWeight;
   fclose(f);
   return 0;
 }
 
-void printMachineList(void){
-  int i, j, firstPrint=0;
-  int curMinIndex = -1;
-  //for now we do a bubble sort because O(n^2) nothing compared to heart of algorithm
-  //could also make the outer loop smaller if we kept track of how many bits were set in the bestMachineList
-  for(i=0;i<nEdges;i++){
-    curMinIndex = -1;
-    for(j=0;j<nEdges;j++){
-      if (bestMachineList[j]){
-	if(curMinIndex == -1){
-	  curMinIndex = j;
-	} 
-	else if(machineIndex[curMinIndex] > machineIndex[j])
-	  curMinIndex = j;	
-      }
-    }
-    if(curMinIndex == -1)
-      break;
-    if(firstPrint++ == 0)
-      printf("%d", machineIndex[curMinIndex]);
+/*****
+ *
+ *
+ *****/
+void updateOptimumSoln(float ebar){
+  machine_t * p = EdgesAdjHead;
+  //sumEbarprime = sumEbar;
+  //nEbarprime = nEbar;
+  best = ebar;
+  while (p != NULL){
+    if (p->crossed)//p->edgeset == E_EDGE)
+      p->inAbar = 1;
     else
-      printf(" %d", machineIndex[curMinIndex]);
-    bestMachineList[curMinIndex] = 0; //unset this bit so we don't show this machine again
+      p->inAbar = 0;    
+    p = p->adjNext;
   }
-  printf("\n");
 }
 
-void printResults(void){
-  printf("%d\n", (int) best);
-  printMachineList();
+/*****
+ *
+ *
+ *****/
+int minimum(machine_t *m,int k)
+{
+  float mi=INFINITY;
+  int i,t=-1;
+  for(i=0;i<k;i++)
+    {
+      if(m[i].mark!=1)
+        {
+          if(mi>=m[i].minpathcost)
+            {
+              mi=m[i].minpathcost;
+              t=i;
+            }
+        }
+    }
+
+#if DEBUG_ASSERT
+  assert(t >= 0);
+#endif
+
+  return t;
 }
+
+
+void dijkstra_single_source_shortest_paths(int source){
+  int i, count, u;
+  for(i=0;i<nNodes;i++)
+    {
+      A[source][i].mark=0;
+      A[source][i].minpathcost = INFINITY;
+      A[source][i].predecessor=-1;
+    }
+  A[source][source].minpathcost = 0;
+
+  count = 0;
+  while(count<nNodes)
+    {
+      u=minimum((machine_t *)&A[source][0],nNodes);
+      count++;
+      A[source][u].mark=1;
+#if DEBUG_ASSERT
+      assert(source >= 0 && source < nNodes);
+      assert(u>=0 && u < nNodes);
+#endif
+      for(i=0;i<nNodes;i++)
+        {
+          //printf("u=%d\ti=%d\tgraph[u][i]=%d\tmark[i]=%d\n", u, i, graph[u][i], mark[i]);
+          if(A[u][i].edgecost > 0)
+            {
+              if(A[source][i].mark!=1)
+                {
+                  //printf("pathestimate[i]=%d\tpathestime[u]=%d\n", pathestimate[i], pathestimate[u]);
+                  if(A[source][i].minpathcost > (A[source][u].minpathcost + A[u][i].edgecost))
+                    {
+
+                      //printf(".");
+                      A[source][i].minpathcost = A[source][u].minpathcost + A[u][i].edgecost;
+                      A[source][i].predecessor=u;
+                    }
+                }
+            }
+        }
+    }
+
+  return;
+}
+
+
+float getMarginalPathCost(int u, int v)
+{
+  if(u==v) return 0.0;
+ 
+  if (A[A[u][v].predecessor][v].crossed == 0)
+    return A[A[u][v].predecessor][v].edgecost + getMarginalPathCost(u, A[u][v].predecessor);
   
+  return getMarginalPathCost(u, A[u][v].predecessor);  
+}
 
-//end condition is all nodes have been visited at least once and we
-//are back to the startNode  
+void incCrossedEdges(int u, int v){
+
+  if (u == v) {
+    visited[v]++;
+    return;
+  }
+#if DEBUG_ASSERT
+  assert(u>=0 && u<nNodes);
+  assert(v>=0 && v<nNodes);
+  assert(A[u][v].predecessor>=0 && A[u][v].predecessor<nNodes);
+#endif
+  visited[v]++;
+  A[A[u][v].predecessor][v].crossed++;
+  incCrossedEdges(u, A[u][v].predecessor);
+}
+
+void decCrossedEdges(int u, int v){
+
+  if (u == v) {
+    visited[v] --;
+    return;
+  }
+#if DEBUG_ASSERT
+  assert(u>=0 && u<nNodes);
+  assert(v>=0 && v<nNodes);
+  assert(A[u][v].predecessor>=0 && A[u][v].predecessor<nNodes);
+#endif
+  visited[v]--;
+  A[A[u][v].predecessor][v].crossed--;
+  decCrossedEdges(u, A[u][v].predecessor);
+}
+
+void printpath(int x,int i)
+{
+  printf("\n");
+  if(i==x)
+    {
+      printf("%d",x);
+    }
+  else if(A[x][i].predecessor==-1)
+    printf("no path from %d to %d",x,i);
+  else
+    {
+      printpath(x,A[x][i].predecessor);
+      printf("..%d",i);
+    }
+}
+
+
 void walk(int node, float totCost) {
-  int i, end = 1;
+  int i, end = 1; 
   float dCost = 0;
-  visited[node] = 1; 
+  visited[node]++; 
   for(i=0;i<nNodes;i++){
     if(!visited[i]) {
       end = 0;
 #if DEBUG_ASSERT
       //shouldnt be possible otherwise graph is not strongly connected to begin with
-      assert(adjMatrix[node][i].minpathcost != INFINITY);
+      assert(A[node][i].minpathcost != INFINITY);
 #endif
       dCost = getMarginalPathCost(node, i);
       if ((totCost + dCost) < best){
@@ -339,27 +589,14 @@ void walk(int node, float totCost) {
       }
     }
   }
-  visited[node] = 0;
+  visited[node]--;
   if (end) {
     //now we need to append the path back to the start node
     //remember not to count edges we have already crossed
     totCost += getMarginalPathCost(node, startNode);
     if (((totCost < best) && (best != -1)) || (best < 0)){
-      best = totCost;
       incCrossedEdges(node, startNode);
-      memmove(bestMachineList, curMachineList, sizeof(short)*nEdges);
-      //bzero((void *)curMachineList, sizeof(int)*nEdges);
-#if DEBUG_MACHINELIST
-      for(i=0;i<nNodes;i++)
-	for(end=0;end<nNodes;end++){
-	  if(adjMatrix[i][end].machIndex != -1 &&
-	     adjMatrix[i][end].crossed > 0){
-	    //bestMachineList[adjMatrix[i][end].machIndex] = 1;
-	    printf("%d ", adjMatrix[i][end].machIndex);
-	  } 
-	}
-      printf("\n");
-#endif
+      updateOptimumSoln(totCost);
       decCrossedEdges(node, startNode);
 
     }//update best 
@@ -369,82 +606,64 @@ void walk(int node, float totCost) {
 }//walk()
 
 
-int main(int argc, char ** argv) {
-  int ret, i, j; 
-  ret = loadFile(argv[1]);
+/*********************************
+ *
+ * Main()
+ *
+ *********************************/
+int main(int argc, char ** argv){
+  int ret, i, j;
   
-  bzero(curMachineList, sizeof(short)*nEdges);
-
+  if( (ret=loadFile(argv[1])) < 0){
+    fprintf(stderr, "input file format error (ret=%d).\n", ret);
+    return -1;
+  }
 #if DEBUG_LOADFILE
-  printf("loadFile: %d\n", ret);
-  printf("nNodes: %d\n", nNodes);
-  printf("nEdges: %d\n", nEdges);
+  fprintf(stderr, "loadFile: %d\n", ret);
+  fprintf(stderr, "nNodes: %d\n", nNodes);
+  fprintf(stderr, "nEdges: %d\n", nEdges);
+  fprintf(stderr, "graphWeight: %d\n", graphWeight);
+  printEdgeAdj();
+  printEdgeNames();
+  printEdgeWeights();//desc order
 #endif
 
-#if DEBUG_ADJMATRIX
-  printAdjMatrix();
-#endif
-
-  for(i=0;i<nNodes;i++) 
-    dijkstra_single_source_shortest_paths(i);
-
-#if DEBUG_DIJKSTRA
-  //print the paths
-  for(i=0;i<nNodes;i++) 
-    for(j=0;j<nNodes;j++) {
-      //source, i, predecessor
-      if (i != j) {
-	printpath(i,j);
-	if(adjMatrix[i][j].minpathcost != INFINITY)
-	  printf("->(%lf)\n",adjMatrix[i][j].minpathcost);
-      }
-    }
-#endif
-
-  /* Check for any unreachable locations */
-  for (i = 0; i < nNodes; i++) {
-    for (j = 0; j < nNodes; j++) {
-      adjMatrix[i][j].crossed = 0;//re-inialize this field
-    }
+  if (nEdges == nNodes){
+    //must be hamiltonian cycle if it is strongly connected
+    //and problem statement said that we could assume it was
+    //updateOptimumSoln(graphWeight);
+    printAnswer();
+    return DONE;
   }
 
-#if DEBUG_ADJMATRIX
-  printf("\n-----\n");
-  printAdjMatrix();
-#endif
+  for(i=0; i<nNodes; i++)
+    dijkstra_single_source_shortest_paths(i);
 
   for(i=0;i<nNodes;i++){    
     //reset visited list
     for(j = 0;j<nNodes; j++)     
       visited[j] = 0;
 
-#if DEBUG_PROGRESS
-    printf("Beginning exploration with node %d of %d (%0.2f%%)\n", i+1, nNodes, 100*((float)i/nNodes));
-#endif
     startNode = i;
     walk(i, 0);
-    
-#if DEBUG_ASSERT
-    int k,z;
-    for(k=0;k<nNodes;k++)
-      for(z=0;z<nNodes;z++)
-	assert(adjMatrix[k][z].crossed == 0);
-#endif
   }
 
-  printResults();
-  
-  /*
-  FILE * file = fopen("out","w+");
-  printf("%0.0f\n", best);
-  fprintf(file, "%d\n", (int) best);
-  for(i=0; i < nNodes;i++){
-    if(bestMachineList[i])
-      fprintf(file, "%d ", i);
-  }
-  fprintf(file,"\n");
-  
-  fclose(file);
-  */
-  return 0;
+  printAnswer();
+
+//  done:
+  //cleanup for good form
+  //freeEdges(EdgesAdjHead);
+  EdgesAdjHead = EdgesNameHead = EdgesCostHead = NULL;
+
+  return (0);
 }
+
+
+
+
+
+
+//other algorithm
+
+//try to insert nodes in between edges (u,v) in current cycle, look for path (u,k,v), k can't exist, 
+//because, that would imply there is a short path between u and v

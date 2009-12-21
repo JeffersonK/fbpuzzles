@@ -16,7 +16,8 @@ filelist = dircache.listdir(testdir)
 testnames = list(set(map(lambda x: x.split('.')[0], filelist)))
 testnames.sort()
 
-for test in testnames:
+
+def runtest(test):
     t0 = time.time()
     infile = os.path.join(testdir, test+in_ext)
     runfile = os.path.join(testdir,test+run_ext)
@@ -30,5 +31,14 @@ for test in testnames:
         print "%s -> PASS (%0.4fs)" % (test, t1-t0)
     else:
         print "\t%s -> FAIL (%0.4fs)" % (test, t1-t0)
-    
+	
+
+if len(sys.argv) > 1:
+	#run one test	
+	runtest(sys.argv[1])	
+	sys.exit(0)
+
+
+for test in testnames:
+	runtest(test)	    
 

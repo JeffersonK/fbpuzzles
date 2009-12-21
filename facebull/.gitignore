@@ -3,6 +3,7 @@
 *.pyc
 *.run
 *.tar
+*.tar.gz
+*.tgz
 facebull
-megbb
 *~
