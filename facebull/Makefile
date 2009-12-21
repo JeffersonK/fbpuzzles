@@ -5,7 +5,7 @@ all: facebull
 
 facebull: facebull.o
 
-megbb: facebull.new.old.o
+megbb: megbb.o
 
 test: facebull
 	@python runtests.py
