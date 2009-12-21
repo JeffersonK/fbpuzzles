@@ -4,4 +4,4 @@ CFLAGS=-Wall
 facebull: facebull.o
 
 clean:
-	rm -f facebull facebul.o
+	rm -f facebull facebull.o
