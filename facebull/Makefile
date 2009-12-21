@@ -5,6 +5,8 @@ all: facebull
 
 facebull: facebull.o
 
+megbb: facebull.new.old.o
+
 test: facebull
 	@python runtests.py
 
@@ -18,7 +20,8 @@ clean:
 	rm -f facebull.tar
 	rm -f facebull.tar.gz
 	rm -f facebull.tgz
-	
+	rm -f megbb *.o
+
 clobber: clean
 	rm -f *~
 

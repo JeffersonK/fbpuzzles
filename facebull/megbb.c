@@ -3,8 +3,8 @@
 //#include <math.h>
 #include <string.h> //for memmove
 
-#define DEBUG_LOADFILE 1
-#define DEBUG_MEGBB_R 1
+#define DEBUG_LOADFILE 0
+#define DEBUG_MEGBB_R 0
 
 #define INF ((2^31)-1)
 #define MAX_NODES (128)
@@ -492,182 +492,6 @@ int megbbinit(void){
   return NOT_DONE;
 }
 
-void megbb_r(machine_t * k, int direction){
-
-  if (k == NULL && direction == FORWARD)
-    {//we have exhausted the forward move
-#if DEBUG_MEGBB_R
-      if ( (nS != 0) && (sumS != 0) ) 
-	printf("Forward Move Finished: invariant broken ns=%d sumS=%d\n", nS, sumS);
-#endif
-      if(sumEbar > sumEbarprime)
-	updateOptimumSoln(sumEbar);
-      return;
-    }
-  else if (k == NULL){
-#if DEBUG_MEGBB_R
-    if (sumEbar != 0)
-      printf("Backtrack Finished: invariant broken sumEbar = %d\n", sumEbar);
-#endif
-    //megbb_r(EdgesAdjHead, FORWARD);
-    return;//done back tracking
-  }
-
-  if ( (graphWeight - sumEbar) == minSumRows[0]){
-    //we have found the theoretical optimum solution for this graph
-    //i.e. - the current solution has the minimum edge from each row
-    updateOptimumSoln(sumEbar);
-    return;
-  }
-
-  printf("@%d(%d) ", k->edgeRealName, direction);
-  if(direction == FORWARD){/*k->edgeset == E_EDGE*/
-    //if ( (rr + t - minSumRows[k->ci]) <= rbar)
-    //  return;
-    if(EDGE_IN_E(k)){
-      if( (Vout[k->ci] != 1) && (Vin[k->cj] != 1) )
-      {  
-	/*if by deleting this edge we can't do better than rbar*/   
-	k->edgeset = NO_EDGE;
-	if(pathExists(k->ci, k->cj)){
-	  INSERT_EBAR(k);
-	  REMOVE_S(k);
-	  megbb_r(k->adjNext, FORWARD);    
-	  INSERT_S(k);
-	  INSERT_E(k);
-	} 
-	else 
-	  { 
-	    //no path existed, so we can't delete this edge, but continue forward move
-	    k->edgeset = E_EDGE;//restore the edge
-	    REMOVE_S(k);
-	    megbb_r(k->adjNext, FORWARD);
-	  }
-      }
-    } 
-    else {//EDGE_IN_EBAR(k) == true
-      megbb_r(k->adjNext, FORWARD);    
-    }
-    
-    if (k->adjNext == NULL){
-      //start back tracking move when we have exhausted forward move
-      	INSERT_S(k);
-	megbb_r(k->adjPrev, BACKWARD);
-	REMOVE_S(k);
-	//don't have to update optimal because we are at last edge and just increased the current solution
-    }
-    return;
-  }//FORWARD
-
-  //DIRECTION IS BACKWARD
-  if(EDGE_IN_EBAR(k)){
-    //restore the edge then start a forward move
-    INSERT_E(k);
-    //! REMOVE_S(k) because k can't be in S
-    megbb_r(k->adjNext, FORWARD);
-    INSERT_S(k);
-    megbb_r(k->adjPrev, BACKWARD);
-    REMOVE_S(k);
-  }
-  else {//if (EDGE_IN_E(k))
-    //REMOVE_S(k);
-    //megbb_r(k->adjNext, FORWARD);
-  }
- 
-  megbb_r(k->adjPrev, BACKWARD);  
-  return;
-}
-
-
-void megbb_r2(machine_t * k){
-
-  machine_t * p = k;
-
-  if (k == NULL){
-    if (sumEbar > sumEbarprime)
-      updateOptimumSoln(sumEbar);
-    return;
-  }
-
-  while (p != NULL){
-    if (EDGE_IN_E(k)){
-      //INSERT_S(k);
-      megbb_r2(k->adjPrev);
-      //try to remove it
-      if( (Vout[k->ci] != 1) && (Vin[k->cj] != 1) )
-	{  
-	  /*if by deleting this edge we can't do better than rbar*/   
-	  k->edgeset = NO_EDGE;
-	  if(pathExists(k->ci, k->cj)){
-	    INSERT_EBAR(k);
-	    //REMOVE_S(k);
-	    megbb_r2(k->adjNext);
-	    //INSERT_S(k);
-	    //INSERT_E(k);
-	  }
-	else 
-	  { 
-	    //no path existed, so we can't delete this edge, but continue forward move
-	    k->edgeset = E_EDGE;//restore the edge
-	    //REMOVE_S(k);
-	    megbb_r2(k->adjNext);
-	  }
-      
-	}
-    }
- 
-    if (EDGE_IN_EBAR(k)){
-      INSERT_E(k);
-      megbb_r2(k->adjNext);
-    }
-
-    //INSERT_S(p);
-    p = p->adjPrev;
-  }
-  return;
-}
-
-int main(int argc, char ** argv){
-  int ret;
-  machine_t * tail;
-  
-  if( (ret=loadFile(argv[1])) < 0)
-    return -1;
-
-#if DEBUG_LOADFILE
-  printf("loadFile: %d\n", ret);
-  printf("nNodes: %d\n", nNodes);
-  printf("nEdges: %d\n", nEdges);
-  printf("graphWeight: %d\n", graphWeight);
-  printEdgeAdj();
-  //printEdgeCosts();
-#endif
-  
-  if (nEdges == nNodes){
-    //must be hamiltonian cycle if it is strongly connected
-    updateOptimumSoln(graphWeight);
-    printAnswer();
-    return DONE;
-  }
-
-  //find last element in adjacency list
-  tail = EdgesAdjHead;
-  while (tail->adjNext != NULL)
-    tail = tail->adjNext;
-
-  if(megbbinit() != DONE){
-    printState();
-    megbb();
-    //megbb_r2(tail);//, BACKWARD);
-
-  }
-  else
-    printf("early done!");
-  
-  printState();
-  printAnswer();
-  return (0);
-}
 
 void megbb(void){
 
@@ -774,3 +598,45 @@ void megbb(void){
   printf("rabar is %d\n", rbar);
   return;
 }
+
+
+
+
+
+
+
+int main(int argc, char ** argv){
+  int ret;
+  machine_t * tail;
+  
+  if( (ret=loadFile(argv[1])) < 0)
+    return -1;
+
+#if DEBUG_LOADFILE
+  printf("loadFile: %d\n", ret);
+  printf("nNodes: %d\n", nNodes);
+  printf("nEdges: %d\n", nEdges);
+  printf("graphWeight: %d\n", graphWeight);
+  printEdgeAdj();
+  //printEdgeCosts();
+#endif
+  
+  if (nEdges == nNodes){
+    //must be hamiltonian cycle if it is strongly connected
+    updateOptimumSoln(graphWeight);
+    printAnswer();
+    return DONE;
+  }
+
+  //find last element in adjacency list
+  tail = EdgesAdjHead;
+  while (tail->adjNext != NULL)
+    tail = tail->adjNext;
+
+  megbbinit();
+  megbb();
+  
+  printAnswer();
+  return (0);
+}
+

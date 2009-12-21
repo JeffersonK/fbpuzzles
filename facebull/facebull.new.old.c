@@ -784,140 +784,6 @@ void megbb(machine_t * tail){
   return;
 }
 
-float getMarginalPathCost(int u, int v)
-{
-  if(u==v) return 0.0;
- 
-  if (adjMatrix[adjMatrix[u][v].predecessor][v].crossed == 0)
-    return adjMatrix[adjMatrix[u][v].predecessor][v].edgecost + getMarginalPathCost(u, adjMatrix[u][v].predecessor);
-  
-  return getMarginalPathCost(u, adjMatrix[u][v].predecessor);  
-}
-
-void incCrossedEdges(int u, int v){
-
-  if (u == v) return;
-
-#if DEBUG_ASSERT
-  assert(u>=0 && u<nNodes);
-  assert(v>=0 && v<nNodes);
-  assert(adjMatrix[u][v].predecessor>=0 && adjMatrix[u][v].predecessor<nNodes);
-#endif
-
-  adjMatrix[adjMatrix[u][v].predecessor][v].crossed++;
-  //machineList[adjMatrix[adjMatrix[u][v].predecessor][v].name]++;
-  //printf("+%d ", adjMatrix[adjMatrix[u][v].predecessor][v].name);
-  incCrossedEdges(u, adjMatrix[u][v].predecessor);
-}
-
-void decCrossedEdges(int u, int v){
-
-  if (u == v) return;
-
-#if DEBUG_ASSERT
-  assert(u>=0 && u<nNodes);
-  assert(v>=0 && v<nNodes);
-  assert(adjMatrix[u][v].predecessor>=0 && adjMatrix[u][v].predecessor<nNodes);
-#endif
-
-  adjMatrix[adjMatrix[u][v].predecessor][v].crossed--;
-  //machineList[adjMatrix[adjMatrix[u][v].predecessor][v].name]--;
-  //printf("-%d ", adjMatrix[adjMatrix[u][v].predecessor][v].name);
-  decCrossedEdges(u, adjMatrix[u][v].predecessor);
-}
-
-void printpath(int x,int i)
-{
-  printf("\n");
-  if(i==x)
-    {
-      printf("%d",x);
-    }
-  else if(adjMatrix[x][i].predecessor==-1)
-    printf("no path from %d to %d",x,i);
-  else
-    {
-      printpath(x,adjMatrix[x][i].predecessor);
-      printf("..%d",i);
-    }
-}
-
-int minimum(machine_t *m,int k)
-{
-  float mi=INFINITY;
-  int i,t=-1;
-  for(i=0;i<k;i++)
-    {
-      if(m[i].crossed!=1)
-	{
-	  if(mi>=m[i].minpathcost)
-	    {
-	      mi=m[i].minpathcost;
-	      t=i;
-	    }
-	}
-    }
-
-#if DEBUG_ASSERT
-  assert(t >= 0);
-#endif
-
-  return t;
-}
-
-void walk(int node, float totCost) {
-  int i, end = 1;
-  float dCost = 0;
-  visited[node] = 1; 
-  for(i=0;i<nNodes;i++){
-    if(!visited[i]) {
-      end = 0;
-#if DEBUG_ASSERT
-      //shouldnt be possible otherwise graph is not strongly connected to begin with
-      assert(adjMatrix[node][i].minpathcost != INFINITY);
-#endif
-      dCost = getMarginalPathCost(node, i);
-      if ((totCost + dCost) < best){
-	incCrossedEdges(node, i);
-	walk(i, totCost + dCost);
-	decCrossedEdges(node, i);
-      }
-    }
-  }
-  visited[node] = 0;
-  if (end) {
-    //now we need to append the path back to the start node
-    //remember not to count edges we have already crossed
-    totCost += getMarginalPathCost(node, startNode);
-    if (((totCost < best) && (best != -1)) || (best < 0)){
-      best = totCost;
-      incCrossedEdges(node, startNode);
-      bzero((void *)bestMachineList, sizeof(int)*MAX_NODES);
-      for(i=0;i<nNodes;i++)
-	for(end=0;end<nNodes;end++){
-	  if(adjMatrix[i][end].name != -1 &&
-	     adjMatrix[i][end].crossed > 0){
-	    //#if DEBUG_ASSERT
-	    //assert( (adjMatrix[i][end].name>=0) && (adjMatrix[i][end].name<nNodes) );
-	    //#endif
-	    bestMachineList[adjMatrix[i][end].name] = 1;
-#if DEBUG_MACHINELIST
-	    printf("%d ", adjMatrix[i][end].name);
-#endif
-	  } 
-	}
-#if DEBUG_MACHINELIST
-      printf("\n");
-#endif
-      decCrossedEdges(node, startNode);
-
-    }//update best 
-
-  }//(if(end)
-  return;
-}//walk()
-
-
 int main(int argc, char ** argv){
   int ret;
   machine_t * tail;
@@ -949,7 +815,6 @@ int main(int argc, char ** argv){
   while (tail->adjNext != NULL)
     tail = tail->adjNext;
 
-#if 0
   //initialize stuff and do first pass solution
   megbbinit();
 
@@ -961,19 +826,8 @@ int main(int argc, char ** argv){
     goto done;
   } 
   megbb(tail);
-#endif
-
-  for(i=0;i<nNodes;i++){    
-    //reset visited list
-    for(j = 0;j<nNodes; j++)     
-      visited[j] = 0;
-
-    startNode = i;
-    walk(i, 0);
-  }
-
+  
   printAnswer();
-
   done:
   //cleanup for good form
   freeEdges(EdgesAdjHead);

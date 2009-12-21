@@ -197,7 +197,7 @@ void freeEdges(machine_t * m){
   //free everyone after you
   freeEdges(m->adjNext);
   //clear him out for good measure, we might get this reallocated to us later
-  bzero(m, sizeof(machine_t));
+  //bzero(m, sizeof(machine_t));
   //free yourself
   free(m);
   return;
@@ -592,7 +592,7 @@ void decCrossedEdges(int u, int v){
 
 
 void walk(int node, float totCost) {
-  int i, end = 1; 
+  int i,end = 1; 
   float dCost = 0;
   visited[node]++; 
   for(i=0;i<nNodes;i++){
