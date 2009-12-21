@@ -178,7 +178,7 @@ void printMinPaths(void){
   fprintf(stderr, "*** MIN PATHS ***\n");
   for(i=0; i<nNodes; i++){
     for(j=0; j<nNodes; j++)
-      fprintf(stderr, "%04.0f\t", A[i][j].minpathcost);
+      fprintf(stderr, "%04.0f(%d)\t", A[i][j].minpathcost, A[i][j].predecessor);
     fprintf(stderr, "\n");
   }
 }
@@ -547,7 +547,7 @@ void dijkstra_single_source_shortest_paths(int source){
 float getMarginalPathCost(int u, int v)
 {
   if(u==v) return 0.0;
- 
+  //if(A[u][v].pre
   //  if (A[A[u][v].predecessor][v].crossed == 0)
   if (A[A[u][v].predecessor][v].m->crossed == 0)
     return A[A[u][v].predecessor][v].m->edgecost + getMarginalPathCost(u, A[u][v].predecessor);
@@ -657,6 +657,8 @@ int main(int argc, char ** argv){
 
   for(i=0; i<nNodes; i++)
     dijkstra_single_source_shortest_paths(i);
+
+  //printMinPaths();
 
   for(i=0;i<nNodes;i++){    
     //reset visited list

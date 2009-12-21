@@ -1,0 +1,7 @@
+CC=gcc
+CFLAGS=-Wall
+
+facebull: facebull.o
+
+clean:
+	rm -f facebull facebul.o

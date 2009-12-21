@@ -3,9 +3,9 @@
 #include <string.h> //for bzero()
 
 #define DEBUG_LOADFILE 0
-#define DEBUG_MEGBB 1
-#define WITH_PRUNING 1
-#define DEBUG_PRUNING 1
+#define DEBUG_MEGBB 0
+#define WITH_PRUNING 0
+#define DEBUG_PRUNING 0
 
 #define INF ((2^31)-1)
 #define MAX_NODES (128)
