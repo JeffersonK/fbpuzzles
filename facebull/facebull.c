@@ -8,6 +8,7 @@
 //#define WITH_PRUNING 1
 //#define DEBUG_PRUNING 1
 
+#define INFINITY (HUGE_VAL)
 //#define INF ((2^31)-1)
 #define MAX_NODES (128)
 #define MAX_EDGES (MAX_NODES*MAX_NODES) //number of elements in adjacency matrix (we can do better than this with a linked lists
