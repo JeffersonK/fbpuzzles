@@ -24,6 +24,8 @@ typedef struct MACHINE_T {
   struct MACHINE_T * adjPrev;	
   struct MACHINE_T * kthNext;//pointer to next highest edge weight
   struct MACHINE_T * nameNext;//pointer to next highest edge weight
+  struct MACHINE_T * nextColMin;
+  struct MACHINE_T * nextRowMin;
 } machine_t;
 
 #define BACKWARD 0
@@ -57,6 +59,11 @@ int sumEbarprime;//current max sum of edge weights we can delete
 
 #define CALCK(i,j) (i*nNodes + j)
 
+#define UPDATE_ROWMAX(m) (if (m->edgecost > rowMax[m->ci]->edgecost) rowMax[m->ci] = m)
+#define UPDATE_COLMAX(m) (if (m->edgecost > colMax[m->ci]->edgecost) colMax[m->ci] = m)
+
+#define UPDATE_ROWMIN(m) (if (m->edgecost < rowMin[m->ci]->edgecost) rowMin[m->ci] = m)
+#define UPDATE_COLMIN(m) (if (m->edgecost < colMin[m->ci]->edgecost) colMin[m->ci] = m)
 
 machine_t * EdgesAdjHead = NULL;//replaces the adjaceny matrix
 machine_t * EdgesNameHead = NULL;//edges sorted by real name (machine name)
@@ -74,7 +81,7 @@ machine_t * rowMax[MAX_NODES];
 machine_t * colMin[MAX_NODES];
 machine_t * colMax[MAX_NODES];
 
-int colsFilled[MAX_NODES];
+//int colsFilled[MAX_NODES];
 
 //sum of all edges in graph
 int graphWeight;
@@ -164,7 +171,7 @@ void printEdgeAdj(void){
 
 /****
  *
- ****/   
+ ***
 void printColsFilled(void){
   int i;
   fprintf(stderr, "COLS FILLED: ");
@@ -172,7 +179,7 @@ void printColsFilled(void){
     fprintf(stderr, " %d", colsFilled[i]);
   fprintf(stderr, "\n");
   return;
-}
+  }*/
 /****
  *
  ****/   
@@ -180,7 +187,7 @@ void printState(){
   int i,j;
   machine_t * p = EdgesAdjHead;
   fprintf(stderr, "--- STATE ---\n");
-  printColsFilled();
+  //printColsFilled();
   fprintf(stderr, "Best(%d) sumEbarprime(%d) sumEbar(%d) nEbar(%d) nS(%d) sumS(%d)\n", 
 	  graphWeight-sumEbarprime, sumEbarprime, sumEbar, nEbar, nS, sumS);
   for(i=0; i<nNodes; i++){
@@ -208,6 +215,95 @@ void printState(){
  * HELPER FUNCTIONS
  *
  ************************/
+
+inline int getColMin(machine_t * m){
+  machine_t * p = colMin[m->cj];
+  while(p != NULL){
+    if(EDGE_IN_E(p) && (p->ci >= m->ci) ){
+      return p->edgecost;
+    }
+    p = p->nextColMin;
+  }
+  return 0;
+}
+
+inline int getRowMin(int u){
+  if (u < 0 || u >= nNodes) fprintf(stderr, "broken invariant\n");
+  machine_t * p = rowMin[u];
+  while(p != NULL){
+    if(EDGE_IN_E(p)){
+      return p->edgecost;
+    }
+    p = p->nextRowMin;
+  }
+  return 0;
+}
+
+/****
+ *
+ ****/   
+void insertColMin(machine_t * m){
+  machine_t * last, * p = colMin[m->cj];  
+  if(p == NULL){
+    m->nextColMin = NULL;
+    colMin[m->cj] = m;
+    return;
+  }
+  
+  if(p->edgecost > m->edgecost){
+    m->nextColMin = p;
+    colMin[m->cj] = m;
+    return;
+  }
+
+  last = p;
+  while(p!=NULL){
+    if (p->edgecost > m->edgecost){
+      m->nextColMin = p;
+      last->nextColMin = m;
+      return;
+    }
+    last = p;
+    p = p->nextColMin;
+  }
+    
+  m->nextColMin = NULL;
+  last->nextColMin = m;
+  return;
+}
+
+/****
+ *
+ ****/   
+void insertRowMin(machine_t * m){
+  machine_t * last, * p = rowMin[m->cj];  
+  if(p == NULL){
+    m->nextRowMin = NULL;
+    rowMin[m->ci] = m;
+    return;
+  }
+  
+  if(p->edgecost > m->edgecost){
+    m->nextRowMin = p;
+    rowMin[m->ci] = m;
+    return;
+  }
+
+  last = p;
+  while(p!=NULL){
+    if (p->edgecost > m->edgecost){
+      m->nextRowMin = p;
+      last->nextRowMin = m;
+      return;
+    }
+    last = p;
+    p = p->nextRowMin;
+  }
+    
+  m->nextRowMin = NULL;
+  last->nextRowMin = m;
+  return;
+}
 
 /****
  *
@@ -381,7 +477,7 @@ void printAnswer(void){
       sum += minCol[i]->edgeCost;
   }
   return sum;
-*/
+
 //i is the i cordinate for kth edge
 int bound(int i, machine_t * k){
   machine_t * p = k;
@@ -392,7 +488,7 @@ int bound(int i, machine_t * k){
 	;
 	}
   }
-}
+  }*/
 /****
  *
  *
@@ -414,7 +510,7 @@ int loadFile(char * filename) {
   bzero(colMax, sizeof(machine_t *)*MAX_NODES);
   bzero(rowMin, sizeof(machine_t *)*MAX_NODES);
   bzero(rowMin, sizeof(machine_t *)*MAX_NODES);
-  bzero(colsFilled, sizeof(colsFilled));
+  //bzero(colsFilled, sizeof(colsFilled));
 
   f = fopen(filename, "r");
   if (f == NULL)
@@ -460,8 +556,13 @@ int loadFile(char * filename) {
     insertEdgeAdj(ptr);
     insertEdgeName(ptr);
     insertEdgeCost(ptr);
+    
+    insertRowMin(ptr);
+    insertColMin(ptr);
+
     nEdges ++;
 
+    /*
     if (colMin[ptr->cj] == NULL)
       colMin[ptr->cj] = ptr;
     else if (colMin[ptr->cj]->edgecost > ptr->edgecost)
@@ -481,8 +582,8 @@ int loadFile(char * filename) {
       rowMax[ptr->cj] = ptr;
     else if (rowMax[ptr->cj]->edgecost < ptr->edgecost)
       rowMax[ptr->cj] = ptr;
-    
-    colsFilled[ptr->cj] ++;//count how many edges go in to this column
+    */
+    //colsFilled[ptr->cj] ++;//count how many edges go in to this column
   }	
   fclose(f);
   return 0;
@@ -659,7 +760,7 @@ void megbbinit(void){
       p->edgeset = NO_EDGE;//set hypothesis
       if(pathExists(p->ci, p->cj)){
 	INSERT_EBAR(p);
-	colsFilled[p->cj]--;
+	//colsFilled[p->cj]--;
       } 
       else {
 	p->edgeset = E_EDGE;//unset hyptohesis
@@ -692,10 +793,14 @@ void megbb(machine_t * tail){
       INSERT_S(k);
       k = k->adjPrev;
     }
-    else 
+    /*    else if (k->edgecost > getColMin(k)){
+      //no point in deleting if we'll do worse
+      INSERT_S(k);
+      k = k->adjPrev;
+
+      } */else 
       {//it's an edge we previously deleted, try forward move
-	INSERT_E(k);
-	colsFilled[k->cj] ++;
+	    INSERT_E(k);
 
 #if WITH_PRUNING	
 	if((sumEbar + sumS - minSumRows[k->ci+1]) <= sumEbarprime)
@@ -703,9 +808,9 @@ void megbb(machine_t * tail){
 	  {
 	    INSERT_S(k);	  
 	  } 
-	else
+	else 
 #endif 
-	    { 
+	  {
 	    //examine k+1 ... n edges after restoring edge k
 	    k = k->adjNext;	    
 	    while(k != NULL)//(k < max_edges)
@@ -721,7 +826,7 @@ void megbb(machine_t * tail){
 		    if(pathExists(k->ci,k->cj))
 		    {
 		      INSERT_EBAR(k);
-		      colsFilled[k->cj] --;
+		      //colsFilled[k->cj] --;
 		      path_existed = 1;
 		    } 
 		  else 

@@ -1,6 +1,8 @@
 CC=gcc
 CFLAGS=-Wall
 
+all: facebull
+
 facebull: facebull.o
 
 clean:
