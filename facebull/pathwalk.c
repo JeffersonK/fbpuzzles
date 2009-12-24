@@ -41,6 +41,7 @@ compound_t A[MAX_NODES][MAX_NODES];
 
 float best;
 float graphWeight;
+float theoryMin;
 
 short startNode;
 short uniqueVisited;
@@ -51,7 +52,7 @@ machine_t * EdgesCostHead = NULL;//edges sorted in decreasing weight
 short compoundIndex[MAX_NODES];
 int nNodes = 0;
 int nEdges = 0;
-
+machine_t * rowMin[MAX_NODES];
 
 /*************************
  *
@@ -330,15 +331,10 @@ int loadFile(char * filename) {
   int cost;
   machine_t * ptr; 
 
-  for(u=0; u<MAX_NODES; u++)
+  for(u=0; u<MAX_NODES; u++){
+    rowMin[u] = NULL;
     for(v=0; v<MAX_NODES; v++)
       {
-	/*
-	if (u == v)
-	  A[u][v].edgecost = 0;
-	else
-	  A[u][v].edgecost = INFINITY;
-	*/
 	if (u == v)
 	  A[u][v].minpathcost = INFINITY;
 	else
@@ -346,13 +342,11 @@ int loadFile(char * filename) {
 	A[u][v].predecessor = -1;
 	A[u][v].mark = 0;
 	A[u][v].m = NULL;
-	//A[u][v].edgeRealNmae = -1;
-	//A[u][v].inAbar = 0;
-
       }
+  }
   graphWeight = 0;
   memset(compoundIndex, 0xff, sizeof(compoundIndex));
-
+  
   f = fopen(filename, "r");
   if (f == NULL)
     return -1;
@@ -405,7 +399,18 @@ int loadFile(char * filename) {
     insertEdgeName(ptr);
     insertEdgeCost(ptr);
     nEdges ++;
-  }	
+
+    if(rowMin[uindex] == NULL)
+      rowMin[uindex] = ptr;
+    else if(rowMin[uindex]->edgecost > ptr->edgecost) 
+      rowMin[uindex] = ptr;
+
+  }
+
+  theoryMin = 0;
+  for(u=0;u<nNodes;u++)
+    theoryMin += rowMin[u]->edgecost;
+
   best = graphWeight;
   fclose(f);
   return 0;
@@ -508,21 +513,31 @@ void dijkstra_single_source_shortest_paths(int source){//, machine_t **A, int nN
 }
 
 
-float getMarginalPathCost(int u, int v, float accum)
-{
-  if(u==v) return accum;//0.0;
- 
-  if (A[A[u][v].predecessor][v].m->crossed == 0){
-    if ( (accum + A[A[u][v].predecessor][v].m->edgecost) > best)
-      return INFINITY;
-    
-    return getMarginalPathCost(u, A[u][v].predecessor, accum + A[A[u][v].predecessor][v].m->edgecost);
-    //return A[A[u][v].predecessor][v].m->edgecost + getMarginalPathCost(u, A[u][v].predecessor, accum +  A[A[u][v].predecessor][v].m->edgecost);
+float getMarginalPathCost(int u, int v, float totCost){
+  float accum = 0.0;
+  int vtmp = v;
+  while(u != vtmp){
+     if (A[A[A[u][vtmp].predecessor][vtmp].predecessor][vtmp].m->crossed == 0)
+       accum += A[A[u][vtmp].predecessor][vtmp].m->edgecost;      
+     vtmp = A[u][vtmp].predecessor;
   }
-  return getMarginalPathCost(u, A[u][v].predecessor, accum);  
+  return accum;
 }
 
-void incCrossedEdges(int u, int v, int dst){
+float getMarginalPathCost_r(int u, int v, float accum)
+{
+  if(u==v) return 0.0;//accum;//0.0;
+  
+  if (A[A[u][v].predecessor][v].m->crossed == 0){
+    //if ( (accum + A[A[u][v].predecessor][v].m->edgecost) > best)
+    //  return INFINITY;
+    //return getMarginalPathCost(u, A[u][v].predecessor, accum + A[A[u][v].predecessor][v].m->edgecost);
+    return A[A[u][v].predecessor][v].m->edgecost + getMarginalPathCost_r(u, A[u][v].predecessor, accum +  A[A[u][v].predecessor][v].m->edgecost);
+  }
+  return getMarginalPathCost_r(u, A[u][v].predecessor, accum);  
+}
+
+ void incCrossedEdges_r(int u, int v, int dst){
 
   if (u == v) {
     return;
@@ -536,27 +551,51 @@ void incCrossedEdges(int u, int v, int dst){
       uniqueVisited ++;
     visited[v] ++;
   }
-
-  incCrossedEdges(u, A[u][v].predecessor, dst);
+  incCrossedEdges_r(u, A[u][v].predecessor, dst);
+ }
+ 
+void incCrossedEdges(int u, int v, int dst){
+  int vtmp = v;
+  while(u != vtmp){
+    A[A[u][vtmp].predecessor][vtmp].m->crossed++;
+     //don't increment for last node on path, or we'll end up
+     //double counting the visit
+    if (vtmp != dst) {
+      if (!visited[vtmp])
+	uniqueVisited ++;
+      visited[vtmp] ++;
+    }
+    vtmp = A[u][vtmp].predecessor;
+  }
 }
 
-void decCrossedEdges(int u, int v, int dst){
-  
+void decCrossedEdges_r(int u, int v, int dst){
   if (u == v) {
     return;
   }
-
   A[A[u][v].predecessor][v].m->crossed--;
-
   if (v != dst){
   visited[v]--;
   if(!visited[v])
     uniqueVisited --;
   }
-  
-  decCrossedEdges(u, A[u][v].predecessor, dst);
+  decCrossedEdges_r(u, A[u][v].predecessor, dst);
 }
 
+void decCrossedEdges(int u, int v, int dst){
+  int vtmp = v;
+  while(u != vtmp){
+    A[A[u][vtmp].predecessor][vtmp].m->crossed--;
+     //don't increment for last node on path, or we'll end up
+     //double counting the visit
+    if (vtmp != dst) {
+      visited[vtmp]--;
+      if (!visited[vtmp])
+	uniqueVisited--;
+    }
+    vtmp = A[u][vtmp].predecessor;
+  }
+}
 
 void walk(int node, float totCost) {
   int i,end = 1; 
@@ -569,7 +608,7 @@ void walk(int node, float totCost) {
   if ( (node == startNode) 
        && (uniqueVisited == nNodes) ){
     if(totCost < best)
-      updateOptimumSoln(totCost);    
+      updateOptimumSoln(totCost);
     return;
   }
 
@@ -577,11 +616,14 @@ void walk(int node, float totCost) {
     if(node!=i && (uniqueVisited < nNodes) && !visited[i]) {
       end = 0;
       dCost = getMarginalPathCost(node, i, totCost);
-      if ((/*totCost +*/ dCost) < best){
+      if ((totCost + dCost) < best){
 	incCrossedEdges(node, i, i);
-	walk(i, /*totCost +*/ dCost);
+	walk(i, totCost + dCost);
 	decCrossedEdges(node, i, i);
       }
+      if(best == theoryMin)
+	return;
+
     }
   }
 
@@ -589,9 +631,9 @@ void walk(int node, float totCost) {
     //now we need to append the path back to the start node
     //remember not to count edges we have already crossed
     dCost = getMarginalPathCost(node, startNode, totCost);
-    if ((/*totCost + */dCost) < best){// && (best != -1)) || (best < 0)){
+    if ((totCost + dCost) < best){
       incCrossedEdges(node, startNode, startNode);
-      updateOptimumSoln(/*totCost +*/ dCost);
+      updateOptimumSoln(totCost + dCost);
       decCrossedEdges(node, startNode, startNode);
     }//update best 
   }//(if(end)

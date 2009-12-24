@@ -67,13 +67,13 @@ out_ext = '.out'
 run_ext = '.run'
 def main():
     filelist = dircache.listdir(testdir)
-    timeout = 60
+    timeout = 10*60
 
     #get ride of duplicates
     testnames = list(set(map(lambda x: x.split('.')[0], filter(lambda x: x.endswith('.in'), filelist))))
 
     testnames.sort()
-    testnames.reverse()
+    #testnames.reverse()
     algorithms = ['./pathwalk','./edgewalk','./megbb']
     tester = None
 
