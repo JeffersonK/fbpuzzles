@@ -13,12 +13,12 @@
 #define MAX_NODES (512)
 #define MAX_EDGES (MAX_NODES*MAX_NODES) //number of elements in adjacency matrix (we can do better than this with a linked lists
 #define MAX_NAME_LEN (8)
+#define CALCK(i,j) (i*nNodes + j)
+#define DONE (99)
+#define NOT_DONE (0)
+#define MEMORY_OVERFLOW (-666)
 
 typedef struct MACHINE_T {
-  //short mark;
-  //short predecessor;
-  //float minpathcost;  
-  ////////////
   float edgecost; 
   short edgeRealName;
   short crossed;
@@ -30,21 +30,14 @@ typedef struct MACHINE_T {
   struct MACHINE_T * kthNext;//pointer to next highest edge weight
   struct MACHINE_T * nameNext;//pointer to next highest edge weight
 } machine_t;
-//machine_t A[MAX_NODES][MAX_NODES];
 
 typedef struct COMPOUND_T {
   short mark;
   short predecessor;
   float minpathcost;  
   machine_t * m;
-  //struct COMPOUND_T * predecessor;
 } compound_t;
 compound_t A[MAX_NODES][MAX_NODES];
-
-
-#define DONE (99)
-#define NOT_DONE (0)
-#define MEMORY_OVERFLOW (-666)
 
 float best;
 float graphWeight;
@@ -52,42 +45,13 @@ float graphWeight;
 short startNode;
 short uniqueVisited;
 short visited[MAX_NODES];
-
-#define CALCK(i,j) (i*nNodes + j)
-
 machine_t * EdgesAdjHead = NULL;//replaces the adjaceny matrix
 machine_t * EdgesNameHead = NULL;//edges sorted by real name (machine name)
 machine_t * EdgesCostHead = NULL;//edges sorted in decreasing weight
-
 short compoundIndex[MAX_NODES];
-
 int nNodes = 0;
 int nEdges = 0;
 
-//#define BACKWARD 0
-//#define FORWARD 1
-//int nS;//cardinality of edges in S, where S is set of edges for i >= k in E
-//int sumS;//sum of edge weights for edges in S
-//Ebar is the set of edges that have been deleted from E
-//int nEbar;//cardinality of Ebar
-//int sumEbar;//sum of edge weights in Ebar, we want to maximize this in our solution
-//current bests
-//int nEbarprime;//current number of edges in Ebarprime
-//int sumEbarprime;//current max sum of edge weights we can delete
-//#define NO_EDGE ( (short) 0)
-//#define E_EDGE ( (short) 1)
-//#define EBAR_EDGE ( (short)-1)
-//#define INSERT_EBAR(m) m->edgeset=EBAR_EDGE;sumEbar+=m->edgecost;nEbar++;Vout[m->ci]--;Vin[m->cj]--
-//#define INSERT_E(m) m->edgeset=E_EDGE;sumEbar-=m->edgecost;nEbar--;Vout[m->ci]++;Vin[m->cj]++
-//#define INSERT_S(m) nS++;sumS+=m->edgecost
-//#define REMOVE_S(m) nS--;sumS-=m->edgecost
-//#define EDGE_IN_E(m) (m->edgeset == E_EDGE)
-//#define EDGE_IN_EBAR(m) (m->edgeset == EBAR_EDGE)
-/*
-#define ROWI(k) (k / nNodes)
-#define COLJ(k) (k % nNodes)
-#define KTH_EDGE(k) (A[ROWI(k)][COLJ(k)])
-*/
 
 /*************************
  *
@@ -100,9 +64,6 @@ int nEdges = 0;
  ****/   
 void printMachine(machine_t * m){
   fprintf(stderr, "Machine:%hi (@%p)\n", m->edgeRealName, m);
-  //fprintf(stderr, "\tminpathcost:%.0f\n", m->minpathcost);
-  //fprintf(stderr, "\tpredecessor:%d\n", m->predecessor);
-  //fprintf(stderr, "\tedgeset:%d\n", m->edgeset);
   fprintf(stderr, "\tedgecost:%.0f\n", m->edgecost);
   fprintf(stderr, "\trow:%hi\n", m->ci);
   fprintf(stderr, "\tcol: %hi\n", m->cj);
@@ -634,52 +595,6 @@ void walk(int node, float totCost) {
   return;
 }//walk()
 
-short visitedLastCross[MAX_EDGES];
-
-void walk2(int node, float totCost){
-  int j;
-  visited[node] ++;
-  if (visited[node] == 1)
-    uniqueVisited ++;
-
-  //base case
-  if ( (node == startNode) && (uniqueVisited == nNodes)){
-    //this is a possible solution
-    if (totCost < best)
-      updateOptimumSoln(totCost);
-    return;
-  }
-
-  for(j=0; j<nNodes; j++){
-    if (A[node][j].m != NULL){
-      if( (A[node][j].m->crossed == 0) && ((totCost + A[node][j].m->edgecost) < best)){
-	A[node][j].m->crossed ++;
-	visitedLastCross[CALCK(node, j)] = uniqueVisited;
-	walk2(j, totCost + A[node][j].m->edgecost);
-	A[node][j].m->crossed --;
-      }
-      else if ( (A[node][j].m->crossed > 0) && (A[node][j].m->crossed < nNodes) ){
-	if(visitedLastCross[CALCK(node,j)] != uniqueVisited){
-	  A[node][j].m->crossed ++;
-	  visitedLastCross[CALCK(node, j)] = uniqueVisited;
-	  walk2(j, totCost);
-	  A[node][j].m->crossed --;
-	}
-      }
-    }
-  }
-  visited[node] --;
-  if(visited[node] == 0)
-    uniqueVisited --;
-  return;
-}
-
-
-/*************************
- *
- *
- *
- *************************/
 
 /*********************************
  *
@@ -710,9 +625,8 @@ int main(int argc, char ** argv){
     goto done;
   }
 
-  //if the ratio of edges to nodes is < 2n use megbb
-  //for(i=0; i<nNodes; i++)
-  //  dijkstra_single_source_shortest_paths(i);
+  for(i=0; i<nNodes; i++)
+    dijkstra_single_source_shortest_paths(i);
   //printMinPaths();
 
   uniqueVisited = 0;
@@ -720,15 +634,9 @@ int main(int argc, char ** argv){
   for(j = 0;j<nNodes; j++)     
     visited[j] = 0;
   
-  for(j = 0;j<nEdges; j++)     
-    visitedLastCross[j] = 0;
-  
   startNode = 0;
-  walk2(startNode, 0);
-  //walk(startNode, 0);
-  
+  walk(startNode, 0);
   printAnswer();
-
  done:
   //cleanup for good form
   freeEdges(EdgesAdjHead);

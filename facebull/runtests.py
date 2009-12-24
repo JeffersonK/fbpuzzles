@@ -16,22 +16,26 @@ filelist = dircache.listdir(testdir)
 testnames = list(set(map(lambda x: x.split('.')[0], filelist)))
 testnames.sort()
 
-
+binaries = ['./pathwalk','./edgewalk','./megbb']
 def runtest(test):
-    t0 = time.time()
-    infile = os.path.join(testdir, test+in_ext)
-    runfile = os.path.join(testdir,test+run_ext)
-    os.system("./facebull " + infile + " >" + runfile)
-    t1 = time.time()
+    
+    for bin in binaries:
+        t0 = time.time()
+        infile = os.path.join(testdir, test+in_ext)
+        runfile = os.path.join(testdir,test+run_ext)
 
-    outfile = os.path.join(testdir, test+out_ext)
-    f1 = open(runfile).read()
-    f2 = open(outfile).read()
-    if f1 == f2:
-        print "%s -> PASS (%0.4fs)" % (test, t1-t0)
-    else:
-        print "\t%s -> FAIL (%0.4fs)" % (test, t1-t0)
-	
+    
+        os.system(bin + " " + infile + " >" + runfile)
+        t1 = time.time()
+    
+        outfile = os.path.join(testdir, test+out_ext)
+        f1 = open(runfile).read()
+        f2 = open(outfile).read()
+        if f1 == f2:
+            print "%s %s -> PASS (%0.4fs)" % (bin, test, t1-t0)
+        else:
+            print "\t%s %s -> FAIL (%0.4fs)" % (bin, test, t1-t0)
+            
 
 if len(sys.argv) > 1:
 	#run one test	

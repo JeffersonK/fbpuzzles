@@ -1,9 +1,13 @@
 CC=gcc
 CFLAGS=-Wall -g
 
-all: facebull megbb
+all: facebull megbb pathwalk edgewalk
 
 facebull: facebull.o
+
+edgewalk: edgewalk.o
+
+pathwalk: pathwalk.o
 
 megbb: megbb.o
 
@@ -14,13 +18,13 @@ submit:	clean facebull
 	@tar -cvf facebull.tar Makefile facebull.c
 	
 clean:
-	rm -f facebull facebull.o
 	rm -f *.pyc *.pyo
 	rm -f test/*.run
 	rm -f facebull.tar
 	rm -f facebull.tar.gz
 	rm -f facebull.tgz
-	rm -f megbb *.o
+	rm -f *.o
+	rm -f edgewalk pathwalk megbb facebull
 
 clobber: clean
 	rm -f *~
