@@ -32,9 +32,9 @@ def runtest(test):
         f1 = open(runfile).read()
         f2 = open(outfile).read()
         if f1 == f2:
-            print "%s %s -> PASS (%0.4fs)" % (bin, test, t1-t0)
+            print "%s %s\t-> PASS (%0.4fs)" % (bin, test, t1-t0)
         else:
-            print "\t%s %s -> FAIL (%0.4fs)" % (bin, test, t1-t0)
+            print "\t%s %s\t-> FAIL (%0.4fs)" % (bin, test, t1-t0)
             
 
 if len(sys.argv) > 1:

@@ -456,7 +456,7 @@ int minimum(compound_t *m,int k)
 }
 
 
-void dijkstra_single_source_shortest_paths(int source){
+void dijkstra_single_source_shortest_paths(int source){//, machine_t **A, int nNodes){
   int i, count, u;
   float edgecost = INFINITY;
   for(i=0;i<nNodes;i++)
