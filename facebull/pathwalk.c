@@ -510,14 +510,14 @@ void dijkstra_single_source_shortest_paths(int source){//, machine_t **A, int nN
 
 float getMarginalPathCost(int u, int v, float accum)
 {
-  if(u==v) return 0.0;
+  if(u==v) return accum;//0.0;
  
   if (A[A[u][v].predecessor][v].m->crossed == 0){
     if ( (accum + A[A[u][v].predecessor][v].m->edgecost) > best)
       return INFINITY;
     
-    //return getMarginalPathCost(u, A[u][v].predecessor, A[A[u][v].predecessor][v].m->edgecost);
-    return A[A[u][v].predecessor][v].m->edgecost + getMarginalPathCost(u, A[u][v].predecessor, accum +  A[A[u][v].predecessor][v].m->edgecost );
+    return getMarginalPathCost(u, A[u][v].predecessor, accum + A[A[u][v].predecessor][v].m->edgecost);
+    //return A[A[u][v].predecessor][v].m->edgecost + getMarginalPathCost(u, A[u][v].predecessor, accum +  A[A[u][v].predecessor][v].m->edgecost);
   }
   return getMarginalPathCost(u, A[u][v].predecessor, accum);  
 }
@@ -577,9 +577,9 @@ void walk(int node, float totCost) {
     if(node!=i && (uniqueVisited < nNodes) && !visited[i]) {
       end = 0;
       dCost = getMarginalPathCost(node, i, totCost);
-      if ((totCost + dCost) < best){
+      if ((/*totCost +*/ dCost) < best){
 	incCrossedEdges(node, i, i);
-	walk(i, totCost + dCost);
+	walk(i, /*totCost +*/ dCost);
 	decCrossedEdges(node, i, i);
       }
     }
@@ -589,9 +589,9 @@ void walk(int node, float totCost) {
     //now we need to append the path back to the start node
     //remember not to count edges we have already crossed
     dCost = getMarginalPathCost(node, startNode, totCost);
-    if ((totCost + dCost) < best){// && (best != -1)) || (best < 0)){
+    if ((/*totCost + */dCost) < best){// && (best != -1)) || (best < 0)){
       incCrossedEdges(node, startNode, startNode);
-      updateOptimumSoln(totCost + dCost);
+      updateOptimumSoln(/*totCost +*/ dCost);
       decCrossedEdges(node, startNode, startNode);
     }//update best 
   }//(if(end)
