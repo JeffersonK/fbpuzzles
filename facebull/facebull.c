@@ -10,7 +10,7 @@
 
 #define INFINITY (HUGE_VAL)
 //#define INF ((2^31)-1)
-#define MAX_NODES (128)
+#define MAX_NODES (512)
 #define MAX_EDGES (MAX_NODES*MAX_NODES) //number of elements in adjacency matrix (we can do better than this with a linked lists
 #define MAX_NAME_LEN (8)
 
@@ -661,15 +661,13 @@ int main(int argc, char ** argv){
 
   //printMinPaths();
 
-  for(i=0;i<nNodes;i++){    
-    //reset visited list
-    for(j = 0;j<nNodes; j++)     
-      visited[j] = 0;
-
-    startNode = i;
-    walk(i, 0);
-  }
-
+  //reset visited list
+  for(j = 0;j<nNodes; j++)     
+    visited[j] = 0;
+  
+  startNode = i;
+  walk(i, 0);
+  
   printAnswer();
 
  done:
