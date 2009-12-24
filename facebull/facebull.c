@@ -46,10 +46,12 @@ compound_t A[MAX_NODES][MAX_NODES];
 #define NOT_DONE (0)
 #define MEMORY_OVERFLOW (-666)
 
-short startNode;
 float best;
-short visited[MAX_NODES];
 float graphWeight;
+
+short startNode;
+short uniqueVisited;
+short visited[MAX_NODES];
 
 #define CALCK(i,j) (i*nNodes + j)
 
@@ -59,8 +61,8 @@ machine_t * EdgesCostHead = NULL;//edges sorted in decreasing weight
 
 short compoundIndex[MAX_NODES];
 
-short nNodes = 0;
-short nEdges = 0;
+int nNodes = 0;
+int nEdges = 0;
 
 //#define BACKWARD 0
 //#define FORWARD 1
@@ -596,8 +598,11 @@ void walk(int node, float totCost) {
   int i,end = 1; 
   float dCost = 0;
   visited[node]++; 
+  if(visited[node] == 1)
+    uniqueVisited ++;
+
   for(i=0;i<nNodes;i++){
-    if(!visited[i]) {
+    if( (uniqueVisited < nNodes) && !visited[i]) {
       end = 0;
 #if DEBUG_ASSERT
       //shouldnt be possible otherwise graph is not strongly connected to begin with
@@ -612,6 +617,9 @@ void walk(int node, float totCost) {
     }
   }
   visited[node]--;
+  if(visited[node] == 0)
+    uniqueVisited --;
+
   if (end) {
     //now we need to append the path back to the start node
     //remember not to count edges we have already crossed
@@ -626,6 +634,12 @@ void walk(int node, float totCost) {
   return;
 }//walk()
 
+void walk2(int node, float totCost){
+  
+
+
+
+}
 
 /*********************************
  *
@@ -658,15 +672,15 @@ int main(int argc, char ** argv){
 
   for(i=0; i<nNodes; i++)
     dijkstra_single_source_shortest_paths(i);
-
   //printMinPaths();
 
+  uniqueVisited = 0;
   //reset visited list
   for(j = 0;j<nNodes; j++)     
     visited[j] = 0;
   
-  startNode = i;
-  walk(i, 0);
+  startNode = 0;
+  walk(startNode, 0);
   
   printAnswer();
 
