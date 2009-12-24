@@ -8,7 +8,7 @@
 #define DEBUG_PRUNING 0
 
 #define INF ((2^31)-1)
-#define MAX_NODES (128)
+#define MAX_NODES (512)
 #define MAX_EDGES (MAX_NODES*MAX_NODES) //number of elements in adjacency matrix (we can do better than this with a linked lists
 #define MAX_NAME_LEN (8)
 
@@ -92,8 +92,8 @@ short Vout[MAX_NODES];
 //out degree of node i in current graph 
 short Vin[MAX_NODES];
 
-short nNodes = 0;
-short nEdges = 0;
+int nNodes = 0;
+int nEdges = 0;
 
 /*
 #define ROWI(k) (k / nNodes)
