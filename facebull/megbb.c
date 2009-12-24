@@ -926,7 +926,7 @@ int main(int argc, char ** argv){
   machine_t * tail;
   
   if( (ret=loadFile(argv[1])) < 0){
-    fprintf(stderr, "input file format error (ret=%d).\n", ret);
+    fprintf(stderr, "input file format error '%s' (ret=%d).\n", argv[1], ret);
     return -1;
   }
 #if DEBUG_LOADFILE

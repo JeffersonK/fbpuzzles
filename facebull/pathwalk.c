@@ -508,90 +508,98 @@ void dijkstra_single_source_shortest_paths(int source){//, machine_t **A, int nN
 }
 
 
-float getMarginalPathCost(int u, int v)
+float getMarginalPathCost(int u, int v, float accum)
 {
   if(u==v) return 0.0;
-  //if(A[u][v].pre
-  //  if (A[A[u][v].predecessor][v].crossed == 0)
-  if (A[A[u][v].predecessor][v].m->crossed == 0)
-    return A[A[u][v].predecessor][v].m->edgecost + getMarginalPathCost(u, A[u][v].predecessor);
-  //return A[A[u][v].predecessor][v].edgecost + getMarginalPathCost(u, A[u][v].predecessor);
-   
-  return getMarginalPathCost(u, A[u][v].predecessor);  
+ 
+  if (A[A[u][v].predecessor][v].m->crossed == 0){
+    if ( (accum + A[A[u][v].predecessor][v].m->edgecost) > best)
+      return INFINITY;
+    
+    //return getMarginalPathCost(u, A[u][v].predecessor, A[A[u][v].predecessor][v].m->edgecost);
+    return A[A[u][v].predecessor][v].m->edgecost + getMarginalPathCost(u, A[u][v].predecessor, accum +  A[A[u][v].predecessor][v].m->edgecost );
+  }
+  return getMarginalPathCost(u, A[u][v].predecessor, accum);  
 }
 
-void incCrossedEdges(int u, int v){
+void incCrossedEdges(int u, int v, int dst){
 
   if (u == v) {
-    visited[v]++;
     return;
   }
-#if DEBUG_ASSERT
-  assert(u>=0 && u<nNodes);
-  assert(v>=0 && v<nNodes);
-  assert(A[u][v].predecessor>=0 && A[u][v].predecessor<nNodes);
-#endif
-  visited[v]++;
-  //A[A[u][v].predecessor][v].crossed++;
+
   A[A[u][v].predecessor][v].m->crossed++;
-  incCrossedEdges(u, A[u][v].predecessor);
+  //don't increment for last node on path, or we'll end up
+  //double counting the visit
+  if (v != dst) {
+    if (!visited[v])
+      uniqueVisited ++;
+    visited[v] ++;
+  }
+
+  incCrossedEdges(u, A[u][v].predecessor, dst);
 }
 
-void decCrossedEdges(int u, int v){
-
+void decCrossedEdges(int u, int v, int dst){
+  
   if (u == v) {
-    visited[v] --;
     return;
   }
-#if DEBUG_ASSERT
-  assert(u>=0 && u<nNodes);
-  assert(v>=0 && v<nNodes);
-  assert(A[u][v].predecessor>=0 && A[u][v].predecessor<nNodes);
-#endif
-  visited[v]--;
-  //A[A[u][v].predecessor][v].crossed--;
+
   A[A[u][v].predecessor][v].m->crossed--;
-  decCrossedEdges(u, A[u][v].predecessor);
+
+  if (v != dst){
+  visited[v]--;
+  if(!visited[v])
+    uniqueVisited --;
+  }
+  
+  decCrossedEdges(u, A[u][v].predecessor, dst);
 }
 
 
 void walk(int node, float totCost) {
   int i,end = 1; 
   float dCost = 0;
+
+  if(!visited[node])
+    uniqueVisited++;
   visited[node]++; 
-  if(visited[node] == 1)
-    uniqueVisited ++;
+  
+  if ( (node == startNode) 
+       && (uniqueVisited == nNodes) ){
+    if(totCost < best)
+      updateOptimumSoln(totCost);    
+    return;
+  }
 
   for(i=0;i<nNodes;i++){
-    if( (uniqueVisited < nNodes) && !visited[i]) {
+    if(node!=i && (uniqueVisited < nNodes) && !visited[i]) {
       end = 0;
-#if DEBUG_ASSERT
-      //shouldnt be possible otherwise graph is not strongly connected to begin with
-      assert(A[node][i].minpathcost != INFINITY);
-#endif
-      dCost = getMarginalPathCost(node, i);
+      dCost = getMarginalPathCost(node, i, totCost);
       if ((totCost + dCost) < best){
-	incCrossedEdges(node, i);
+	incCrossedEdges(node, i, i);
 	walk(i, totCost + dCost);
-	decCrossedEdges(node, i);
+	decCrossedEdges(node, i, i);
       }
     }
   }
-  visited[node]--;
-  if(visited[node] == 0)
-    uniqueVisited --;
 
   if (end) {
     //now we need to append the path back to the start node
     //remember not to count edges we have already crossed
-    totCost += getMarginalPathCost(node, startNode);
-    if (((totCost < best) && (best != -1)) || (best < 0)){
-      incCrossedEdges(node, startNode);
-      updateOptimumSoln(totCost);
-      decCrossedEdges(node, startNode);
+    dCost = getMarginalPathCost(node, startNode, totCost);
+    if ((totCost + dCost) < best){// && (best != -1)) || (best < 0)){
+      incCrossedEdges(node, startNode, startNode);
+      updateOptimumSoln(totCost + dCost);
+      decCrossedEdges(node, startNode, startNode);
     }//update best 
-
   }//(if(end)
+
+  visited[node]--;
+  if(!visited[node])
+    uniqueVisited--;
+
   return;
 }//walk()
 
