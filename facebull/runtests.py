@@ -85,7 +85,7 @@ def main():
         elif sys.argv[1] == 'megbb':
             TestSuper(testnames, [algorithms[2]], timeout)
         else:
-            tester = TestSuper([sys.argv[1]], algorithms, timeout)
+            tester = TestSuper(filter(lambda x: x.startswith(sys.argv[1]), testnames), algorithms, timeout)
     else:
         tester = TestSuper(testnames, algorithms, timeout)
 

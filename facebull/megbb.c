@@ -275,22 +275,23 @@ void insertColMin(machine_t * m){
  *
  ****/   
 void insertRowMin(machine_t * m){
-  machine_t * last, * p = rowMin[m->cj];  
+  machine_t * last, * p = rowMin[m->ci];  
   if(p == NULL){
     m->nextRowMin = NULL;
     rowMin[m->ci] = m;
     return;
   }
   
-  if(p->edgecost > m->edgecost){
+  if(p->edgecost >= m->edgecost){
     m->nextRowMin = p;
     rowMin[m->ci] = m;
     return;
   }
 
   last = p;
+  p = p->nextRowMin;
   while(p!=NULL){
-    if (p->edgecost > m->edgecost){
+    if (p->edgecost >= m->edgecost){
       m->nextRowMin = p;
       last->nextRowMin = m;
       return;
@@ -322,7 +323,7 @@ void freeEdges(machine_t * m){
 /****
  *
  ****/   
-short insert2index(short name, short * list, short * listlen, int maxlen){
+short insert2index(short name, short * list, int * listlen, int maxlen){
   int i;
   for(i=0; i < *listlen; i++){
     if(list[i] == name)

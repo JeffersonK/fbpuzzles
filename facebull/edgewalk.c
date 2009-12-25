@@ -19,13 +19,18 @@ typedef struct MACHINE_T {
   short edgeRealName;
   short crossed;
   short inAbar; //whether edge is part of optimal solution or not 
+  short inAbarTmp;
   short ci;
   short cj;
   struct MACHINE_T * adjNext;
   struct MACHINE_T * adjPrev;	
   struct MACHINE_T * kthNext;//pointer to next highest edge weight
   struct MACHINE_T * nameNext;//pointer to next highest edge weight
+  struct MACHINE_T * nextRowMin;
+
 } machine_t;
+
+machine_t * rowMin[MAX_NODES];
 
 typedef struct COMPOUND_T {
   short mark;
@@ -143,7 +148,42 @@ void freeEdges(machine_t * m){
 /****
  *
  ****/   
-short insert2index(short name, short * list, short * listlen, int maxlen){
+void insertRowMin(machine_t * m){
+  machine_t * last, * p = rowMin[m->ci];  
+  m->nextRowMin = NULL;
+  if(p == NULL){
+    m->nextRowMin = NULL;
+    rowMin[m->ci] = m;
+    return;
+  }
+  
+  if(p->edgecost >= m->edgecost){
+    m->nextRowMin = p;
+    rowMin[m->ci] = m;
+    return;
+  }
+
+  last = p;
+  p = p->nextRowMin;
+  while(p!=NULL){
+    if (p->edgecost >= m->edgecost){
+      m->nextRowMin = p;
+      last->nextRowMin = m;
+      return;
+    }
+    last = p;
+    p = p->nextRowMin;
+  }
+    
+  m->nextRowMin = NULL;
+  last->nextRowMin = m;
+  return;
+}
+
+/****
+ *
+ ****/   
+short insert2index(short name, short * list, int * listlen, int maxlen){
   int i;
   for(i=0; i < *listlen; i++){
     if(list[i] == name)
@@ -272,9 +312,18 @@ int insertEdgeAdj(machine_t * m) {
  ****/
 void printAnswer(void){
   machine_t * p = EdgesNameHead;
+  float sum = 0.0;
   int first = 1;
   //printf("%d\n", graphWeight - sumEbarprime);  
   printf("%.0f\n", best);  
+  /*
+  while(p!=NULL){
+    if(p->inAbar)
+      sum += p->edgecost;
+    p = p->nameNext;
+  }
+  printf("%.0f\n", sum); */ 
+  p = EdgesNameHead;
   while (p != NULL){
     if (p->inAbar){
       if (first){
@@ -303,15 +352,10 @@ int loadFile(char * filename) {
   int cost;
   machine_t * ptr; 
 
-  for(u=0; u<MAX_NODES; u++)
+  for(u=0; u<MAX_NODES; u++){
+    rowMin[u] = NULL;
     for(v=0; v<MAX_NODES; v++)
       {
-	/*
-	if (u == v)
-	  A[u][v].edgecost = 0;
-	else
-	  A[u][v].edgecost = INFINITY;
-	*/
 	if (u == v)
 	  A[u][v].minpathcost = INFINITY;
 	else
@@ -319,10 +363,8 @@ int loadFile(char * filename) {
 	A[u][v].predecessor = -1;
 	A[u][v].mark = 0;
 	A[u][v].m = NULL;
-	//A[u][v].edgeRealNmae = -1;
-	//A[u][v].inAbar = 0;
-
       }
+  }
   graphWeight = 0;
   memset(compoundIndex, 0xff, sizeof(compoundIndex));
 
@@ -364,6 +406,7 @@ int loadFile(char * filename) {
     memset((void *) ptr, 0x0, sizeof(machine_t));
     ptr->crossed = 0;
     ptr->inAbar = 1;
+    ptr->inAbarTmp = 0;
     ptr->edgeRealName = machIntName;
     ptr->ci = uindex;
     ptr->cj = vindex;
@@ -374,6 +417,7 @@ int loadFile(char * filename) {
     insertEdgeAdj(ptr);
     insertEdgeName(ptr);
     insertEdgeCost(ptr);
+    insertRowMin(ptr);
     nEdges ++;
   }	
   best = graphWeight;
@@ -389,12 +433,37 @@ void updateOptimumSoln(float ebar){
   machine_t * p = EdgesAdjHead;
   best = ebar;
   while (p != NULL){
-    if (p->crossed)
-      p->inAbar = 1;
+    if (p->crossed > 0) 
+      p->inAbar = 1;//Tmp = 1;
     else
-      p->inAbar = 0;    
+      p->inAbar = 0;//Tmp = 0;    
     p = p->adjNext;
   }
+  //printAbarTemp();
+}
+
+void printAbarTemp(void){
+  machine_t * p = EdgesNameHead;
+  printf("AbarTemp: ");
+  while (p != NULL){
+    if (p->inAbarTmp){
+      printf("%d ", p->edgeRealName);
+    }
+    p = p->nameNext;
+  }
+  printf("\n");
+}
+
+void lockSoln(void){
+  machine_t * p = EdgesNameHead;
+  while (p != NULL){
+    if (p->inAbarTmp){
+      p->inAbar++;
+      //printf("%d ", p->edgeRealName);
+    }
+    p = p->nameNext;
+  }
+  //printf("\n");
 }
 
 /************
@@ -404,58 +473,68 @@ void updateOptimumSoln(float ebar){
  ************/
 short visitedLastCross[MAX_EDGES];
 void walk2(int node, float totCost){
-  int j;
-  visited[node] ++;
-  if (visited[node] == 1)
-    uniqueVisited ++;
+  machine_t * ptr;
 
+  if (!visited[node])
+    uniqueVisited++;
+  visited[node]++;
+  
   //base case
   if ( (node == startNode) && (uniqueVisited == nNodes)){
     //this is a possible solution
     if (totCost < best)
       updateOptimumSoln(totCost);
+    
+    visited[node]--;
+    if (!visited[node])
+      uniqueVisited--;
     return;
   }
 
   //first try to go to nodes you haven't visisted yet
-  for(j=0;j<nNodes;j++){
-    if( (A[node][j].m != NULL) && !visited[j]){
-      if( (A[node][j].m->crossed == 0) && ((totCost + A[node][j].m->edgecost) < best)){
-	A[node][j].m->crossed ++;
-	visitedLastCross[CALCK(node, j)] = uniqueVisited;
-	walk2(j, totCost + A[node][j].m->edgecost);
-	A[node][j].m->crossed --;
+  ptr = rowMin[node];
+  while(ptr != NULL){
+    if(!visited[ptr->cj]){
+      if( (ptr->crossed == 0) && ((totCost + ptr->edgecost) < best)){
+	ptr->crossed++;
+	visitedLastCross[CALCK(ptr->ci, ptr->cj)] = uniqueVisited;
+	walk2(ptr->cj, totCost + ptr->edgecost);
+	ptr->crossed--;
       }
-      else if ( (A[node][j].m->crossed > 0) && (A[node][j].m->crossed < maxOutDegree) ){
-	if(visitedLastCross[CALCK(node,j)] != uniqueVisited){
-	  A[node][j].m->crossed ++;
-	  visitedLastCross[CALCK(node, j)] = uniqueVisited;
-	  walk2(j, totCost);
-	  A[node][j].m->crossed --;
+      else if ( (ptr->crossed > 0) && (ptr->crossed < maxOutDegree) ){
+	if(visitedLastCross[CALCK(ptr->ci,ptr->cj)] != uniqueVisited){
+	  ptr->crossed++;
+	  visitedLastCross[CALCK(ptr->ci, ptr->cj)] = uniqueVisited;
+	  walk2(ptr->cj, totCost);
+	  ptr->crossed--;
 	}
       }
     }
+    ptr = ptr->nextRowMin;
   }
 
   //next try revisiting nodes that have already been visited
-  for(j=0; j<nNodes; j++){
-    if ( (A[node][j].m != NULL) && visited[j]){      
-      if( (A[node][j].m->crossed == 0) && ((totCost + A[node][j].m->edgecost) < best)){
-	A[node][j].m->crossed ++;
-	visitedLastCross[CALCK(node, j)] = uniqueVisited;
-	walk2(j, totCost + A[node][j].m->edgecost);
-	A[node][j].m->crossed --;
+  ptr = rowMin[node];
+  while(ptr != NULL){
+    if (visited[ptr->cj]){
+      if( (ptr->crossed == 0) && ((totCost + ptr->edgecost) < best)){
+	ptr->crossed ++;
+	visitedLastCross[CALCK(ptr->ci, ptr->cj)] = uniqueVisited;
+	walk2(ptr->cj, totCost + ptr->edgecost);
+	ptr->crossed --;
       }
-      else if ( (A[node][j].m->crossed > 0) && (A[node][j].m->crossed < maxOutDegree) ){
-	if(visitedLastCross[CALCK(node,j)] != uniqueVisited){
-	  A[node][j].m->crossed ++;
-	  visitedLastCross[CALCK(node, j)] = uniqueVisited;
-	  walk2(j, totCost);
-	  A[node][j].m->crossed --;
+      else if ( (ptr->crossed > 0) && (ptr->crossed < maxOutDegree) ){
+	if(visitedLastCross[CALCK(ptr->ci,ptr->cj)] != uniqueVisited){
+	  ptr->crossed ++;
+	  visitedLastCross[CALCK(ptr->ci, ptr->cj)] = uniqueVisited;
+	  walk2(ptr->cj, totCost);
+	  ptr->crossed --;
 	}
       }
     }
+    ptr = ptr->nextRowMin;
   }
+ done:
   visited[node] --;
   if(visited[node] == 0)
     uniqueVisited --;
@@ -468,7 +547,18 @@ void walk2(int node, float totCost){
  *
  *
  *************************/
+void printRowMins(void){
+  machine_t * ptr;
+  int i;
+  for(i=0;i<nNodes;i++){
+    ptr = rowMin[i];
+    while(ptr != NULL){
+      printMachine(ptr);
+      ptr = ptr->nextRowMin;
+    }
+  }
 
+}
 /*********************************
  *
  * Main()
@@ -497,7 +587,7 @@ int main(int argc, char ** argv){
     printAnswer();
     goto done;
   }
-
+  
   maxOutDegree = 0;
   ret = 0;
   for (i=0; i<nNodes; i++)
@@ -515,18 +605,20 @@ int main(int argc, char ** argv){
   //  dijkstra_single_source_shortest_paths(i);
   //printMinPaths();
 
-  uniqueVisited = 0;
-  //reset visited list
-  for(j = 0;j<nNodes; j++)     
-    visited[j] = 0;
-  
-  for(j = 0;j<nEdges; j++)     
-    visitedLastCross[j] = 0;
-  
-  startNode = 0;
-  walk2(startNode, 0);
-  //walk(startNode, 0);
-  
+  /*for(i=0; i<nNodes; i++)*/{
+    uniqueVisited = 0;
+    //reset visited list
+    for(j = 0;j<nNodes; j++)     
+      visited[j] = 0;
+    
+    for(j = 0;j<nEdges; j++)     
+      visitedLastCross[j] = 0;
+    
+    //best = graphWeight;//reset this
+    startNode = 0;
+    walk2(startNode, 0);
+    //printAnswer();
+  }
   printAnswer();
 
  done:

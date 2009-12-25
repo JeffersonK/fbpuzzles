@@ -171,7 +171,7 @@ void freeEdges(machine_t * m){
 /****
  *
  ****/   
-short insert2index(short name, short * list, short * listlen, int maxlen){
+short insert2index(short name, short * list, int * listlen, int maxlen){
   int i;
   for(i=0; i < *listlen; i++){
     if(list[i] == name)
@@ -517,7 +517,7 @@ float getMarginalPathCost(int u, int v, float totCost){
   float accum = 0.0;
   int vtmp = v;
   while(u != vtmp){
-     if (A[A[A[u][vtmp].predecessor][vtmp].predecessor][vtmp].m->crossed == 0)
+     if (A[A[u][vtmp].predecessor][vtmp].m->crossed == 0)
        accum += A[A[u][vtmp].predecessor][vtmp].m->edgecost;      
      vtmp = A[u][vtmp].predecessor;
   }
