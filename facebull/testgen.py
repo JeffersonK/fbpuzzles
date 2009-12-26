@@ -12,6 +12,22 @@ MIN_WEIGHT = 1
 MAX_WEIGHT = 1000
 
 #
+#
+#
+def readGraphFromFile(filename):
+
+    f = open(filename)
+    lines = f.read().split('\n')
+    G = nx.DiGraph()
+    for line in lines:
+        tok = line.split()
+        if len(tok) == 4:
+            G.add_edges_from([(tok[1][1:],tok[2][1:], {'label':tok[0][1:], 'weight':int(tok[3])})])
+    return G
+
+#
+#
+#
 def writeGraphToFile(filename, G):
     
     solWeight = 0
@@ -42,6 +58,11 @@ def writeGraphToFile(filename, G):
     #nx.draw(G)
     #plt.savefig(filename+'.png')
 
+    return
+
+def createGraphPng(G, filename):
+    nx.draw(G)
+    plt.savefig(filename+'.png')
     return
 
 #generate a solution that has c cycles in it
@@ -126,6 +147,10 @@ def generateClusteredSolnType2(n, m):
 def main():
     G = generateRandomSoln(100, 150, 1)
     writeGraphToFile("graph",G)
+
+    G2 = readGraphFromFile("graph.in")
+    
+    createGraphPng(G2, 'graph') 
     return
 
 

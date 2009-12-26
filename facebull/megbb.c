@@ -826,12 +826,12 @@ void megbb(machine_t * tail){
       INSERT_S(k);
       k = k->adjPrev;
     }
-    /*    else if (k->edgecost > getColMin(k)){
-      //no point in deleting if we'll do worse
+    else if (k->edgecost > A[k->ci][k->cj].minpathcost){
+      //no point in adding it back if we know its not part of soln
       INSERT_S(k);
       k = k->adjPrev;
 
-      } */else 
+      } else 
       {//it's an edge we previously deleted, try forward move
 	    INSERT_E(k);
 
@@ -948,8 +948,8 @@ int main(int argc, char ** argv){
     return DONE;
   }
 
-  //for(i=0; i<nNodes; i++)
-  // dijkstra_single_source_shortest_paths(i);
+  for(i=0; i<nNodes; i++)
+    dijkstra_single_source_shortest_paths(i);
   //printMinPaths();
 
   //find last element in adjacency list
