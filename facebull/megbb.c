@@ -68,23 +68,19 @@ int nEbarprime;//current number of edges in Ebarprime
 int sumEbarprime;//current max sum of edge weights we can delete
 
 machine_t * EdgesAdjHead = NULL;//replaces the adjaceny matrix
+machine_t * EdgesAdjTail = NULL;//replaces the adjaceny matrix
 machine_t * EdgesNameHead = NULL;//edges sorted by real name (machine name)
 machine_t * EdgesCostHead = NULL;//edges sorted in decreasing weight
 
 short compoundIndex[MAX_NODES];
 
 //the ith element contains the sum of the min edges in the last i rows
-int minSumRows[MAX_NODES];
-//the ith element contains the sum of the min edges in the last i rows
-int maxSumRows[MAX_NODES];
-
-machine_t * rowMin[MAX_NODES];
-machine_t * rowMax[MAX_NODES];
-machine_t * colMin[MAX_NODES];
-machine_t * colMax[MAX_NODES];
+int minSumRows[MAX_NODES+1];
 
 //sum of all edges in graph
 int graphWeight;
+int nNodes = 0;
+int nEdges = 0;
 
 //useful book keeping datastructures to know quickly if we can delete an edge or not
 //out degree of node i in current graph 
@@ -92,14 +88,7 @@ short Vout[MAX_NODES];
 //out degree of node i in current graph 
 short Vin[MAX_NODES];
 
-int nNodes = 0;
-int nEdges = 0;
 
-/*
-#define ROWI(k) (k / nNodes)
-#define COLJ(k) (k % nNodes)
-#define KTH_EDGE(k) (A[ROWI(k)][COLJ(k)])
-*/
 
 /*************************
  *
@@ -186,7 +175,6 @@ void printState(){
   int i,j;
   machine_t * p = EdgesAdjHead;
   fprintf(stderr, "--- STATE ---\n");
-  //printColsFilled();
   fprintf(stderr, "Best(%d) sumEbarprime(%d) sumEbar(%d) nEbar(%d) nS(%d) sumS(%d)\n", 
 	  graphWeight-sumEbarprime, sumEbarprime, sumEbar, nEbar, nS, sumS);
   for(i=0; i<nNodes; i++){
@@ -214,97 +202,6 @@ void printState(){
  * HELPER FUNCTIONS
  *
  ************************/
-
-inline int getColMin(machine_t * m){
-  machine_t * p = colMin[m->cj];
-  while(p != NULL){
-    if(EDGE_IN_E(p) && (p->ci >= m->ci) ){
-      return p->edgecost;
-    }
-    p = p->nextColMin;
-  }
-  return 0;
-}
-
-inline int getRowMin(int u){
-  if (u < 0 || u >= nNodes) fprintf(stderr, "broken invariant\n");
-  machine_t * p = rowMin[u];
-  while(p != NULL){
-    if(EDGE_IN_E(p)){
-      return p->edgecost;
-    }
-    p = p->nextRowMin;
-  }
-  return 0;
-}
-
-/****
- *
- ****/   
-void insertColMin(machine_t * m){
-  machine_t * last, * p = colMin[m->cj];  
-  if(p == NULL){
-    m->nextColMin = NULL;
-    colMin[m->cj] = m;
-    return;
-  }
-  
-  if(p->edgecost > m->edgecost){
-    m->nextColMin = p;
-    colMin[m->cj] = m;
-    return;
-  }
-
-  last = p;
-  while(p!=NULL){
-    if (p->edgecost > m->edgecost){
-      m->nextColMin = p;
-      last->nextColMin = m;
-      return;
-    }
-    last = p;
-    p = p->nextColMin;
-  }
-    
-  m->nextColMin = NULL;
-  last->nextColMin = m;
-  return;
-}
-
-/****
- *
- ****/   
-void insertRowMin(machine_t * m){
-  machine_t * last, * p = rowMin[m->ci];  
-  if(p == NULL){
-    m->nextRowMin = NULL;
-    rowMin[m->ci] = m;
-    return;
-  }
-  
-  if(p->edgecost >= m->edgecost){
-    m->nextRowMin = p;
-    rowMin[m->ci] = m;
-    return;
-  }
-
-  last = p;
-  p = p->nextRowMin;
-  while(p!=NULL){
-    if (p->edgecost >= m->edgecost){
-      m->nextRowMin = p;
-      last->nextRowMin = m;
-      return;
-    }
-    last = p;
-    p = p->nextRowMin;
-  }
-    
-  m->nextRowMin = NULL;
-  last->nextRowMin = m;
-  return;
-}
-
 /****
  *
  ****/   
@@ -313,13 +210,10 @@ void freeEdges(machine_t * m){
     return;  
   //free everyone after you
   freeEdges(m->adjNext);
-  //clear him out for good measure, we might get this reallocated to us later
-  bzero(m, sizeof(machine_t));
   //free yourself
   free(m);
   return;
 }
-
 /****
  *
  ****/   
@@ -411,6 +305,7 @@ int insertEdgeAdj(machine_t * m) {
   if (EdgesAdjHead == NULL)
     {
       EdgesAdjHead = m;
+      EdgesAdjTail = m;
       return (0);
     }
   ptr = EdgesAdjHead;	
@@ -442,6 +337,9 @@ int insertEdgeAdj(machine_t * m) {
   m->adjNext = ptr->adjNext;
   if (ptr->adjNext != NULL)
     ptr->adjNext->adjPrev = m;
+  else
+    EdgesAdjTail = m;
+
   ptr->adjNext = m;
   return (0);
 }
@@ -483,12 +381,7 @@ int loadFile(char * filename) {
   machine_t * ptr; 
 
   graphWeight = 0;
-  memset(compoundIndex, 0xff, sizeof(compoundIndex));
-  bzero(colMin, sizeof(machine_t *)*MAX_NODES);
-  bzero(colMax, sizeof(machine_t *)*MAX_NODES);
-  bzero(rowMin, sizeof(machine_t *)*MAX_NODES);
-  bzero(rowMin, sizeof(machine_t *)*MAX_NODES);
-
+  //memset(compoundIndex, 0xff, sizeof(compoundIndex));
   f = fopen(filename, "r");
   if (f == NULL)
     return -1;
@@ -528,16 +421,10 @@ int loadFile(char * filename) {
     ptr->ci = uindex;
     ptr->cj = vindex;
     ptr->edgecost = cost;
-
     graphWeight += cost;
-    
     insertEdgeAdj(ptr);
     insertEdgeName(ptr);
-    insertEdgeCost(ptr);
-    
-    insertRowMin(ptr);
-    insertColMin(ptr);
-
+    insertEdgeCost(ptr);   
     nEdges ++;
   }	
   fclose(f);
@@ -599,12 +486,12 @@ int pathExists(short src, short dst){
  *
  ***/
 void megbbinit(void){
-  int i, min, max;
-  machine_t * p;
-  
+  int i, min;
+  machine_t * p;  
   for (i=0; i<nNodes; i++){
-    maxSumRows[i] = minSumRows[i] = Vout[i] = Vin[i] = 0;
+    minSumRows[i] = Vout[i] = Vin[i] = 0;
   }
+
   //STEP 1
   p = EdgesAdjHead;
   while(p != NULL)
@@ -617,7 +504,7 @@ void megbbinit(void){
     }
   p = EdgesAdjHead;
   i = p->ci;
-  max = min = p->edgecost;
+  min = p->edgecost;
   while(p != NULL){
     if(p->ci > i){//row changed
 
@@ -626,43 +513,30 @@ void megbbinit(void){
       fprintf(stderr, "max in row %d is %d\n", i, max);
 #endif
       minSumRows[i] = min;
-      maxSumRows[i] = max;
       i = p->ci;
       min = p->edgecost;
-      max = p->edgecost;
-
     } else if (p->edgecost < min){
       min = p->edgecost;
 
-    } else if (p->edgecost > max){
-      max = p->edgecost;
     }
     p = p->adjNext;
   }
   minSumRows[i] = min;
-  maxSumRows[i] = max;
-
+  
 #if DEBUG_MEGBB
   fprintf(stderr, "min in row %d is %d\n", i, min);
-  fprintf(stderr, "max in row %d is %d\n", i, max);
 #endif
-  max = maxSumRows[nNodes-1];
   min = minSumRows[nNodes-1];
-  maxSumRows[nNodes] = 0;
   minSumRows[nNodes] = 0;
   for(i=nNodes-1;i>=0;i--){
     min = minSumRows[i];
-    max = maxSumRows[i];
     if (i == nNodes - 1){
       minSumRows[i] = min;
-      maxSumRows[i] = max;
     } else {
       minSumRows[i] = min + minSumRows[i+1];
-      maxSumRows[i] = max + maxSumRows[i+1];
     }
 #if DEBUG_MEGBB
     fprintf(stderr, "minSumRows[%d] = %d\n", i, minSumRows[i]);
-    fprintf(stderr, "maxSumRows[%d] = %d\n", i, maxSumRows[i]);
 #endif
   }
 #if DEBUG_MEGBB
@@ -674,48 +548,14 @@ void megbbinit(void){
   nEbar = 0;
   sumEbarprime = 0;
 
-  p = EdgesCostHead;
-  while(p != NULL){
-#if DEBUG_MEGBB
-    fprintf(stderr, "(%hi,%hi)=%hi Vout[%hi]=%hi Vin[%hi]=%hi\n",
-	    p->ci,p->cj,p->edgeset,p->ci,Vout[p->ci],p->cj,Vin[p->cj]);
-#endif
-    if( (EDGE_IN_E(p)) && (Vout[p->ci] != 1) && (Vin[p->cj] != 1) ){      
-      p->edgeset = NO_EDGE;//set hypothesis
-      if(pathExists(p->ci, p->cj)){
-	INSERT_EBAR(p);
-	
-      } 
-      else {
-	p->edgeset = E_EDGE;//unset hyptohesis
-      }
-    }
-    p = p->kthNext;
-  }
-  updateOptimumSoln(sumEbar);
-
-  //reset the edges
-  p = EdgesCostHead;
-  while (p != NULL){
-    if (EDGE_IN_EBAR(p)){
-      INSERT_E(p);
-    }
-    p = p->kthNext;
-  }
-
   p = EdgesAdjHead;
   //STEP 2: do a first pass to get the first solution
   while(p != NULL){
-#if DEBUG_MEGBB
-    fprintf(stderr, "(%hi,%hi)=%hi Vout[%hi]=%hi Vin[%hi]=%hi\n",
-	    p->ci,p->cj,p->edgeset,p->ci,Vout[p->ci],p->cj,Vin[p->cj]);
-#endif
     if( (EDGE_IN_E(p)) && (Vout[p->ci] != 1) && (Vin[p->cj] != 1) ){
       
       p->edgeset = NO_EDGE;//set hypothesis
       if(pathExists(p->ci, p->cj)){
 	INSERT_EBAR(p);
-	//colsFilled[p->cj]--;
       } 
       else {
 	p->edgeset = E_EDGE;//unset hyptohesis
@@ -724,8 +564,7 @@ void megbbinit(void){
     p = p->adjNext;
   }
   //save current solution
-  if (sumEbar > sumEbarprime)
-    updateOptimumSoln(sumEbar);
+  updateOptimumSoln(sumEbar);
   return;
 }
 
@@ -748,13 +587,11 @@ int minimum(compound_t *m,int k)
             }
         }
     }
-
 #if DEBUG_ASSERT
   assert(t >= 0);
 #endif
   return t;
 }
-
 
 void dijkstra_single_source_shortest_paths(int source){
   int i, count, u;
@@ -779,7 +616,6 @@ void dijkstra_single_source_shortest_paths(int source){
 #endif
       for(i=0;i<nNodes;i++)
         {
-          //printf("u=%d\ti=%d\tgraph[u][i]=%d\tmark[i]=%d\n", u, i, graph[u][i], mark[i]);
 	  if(A[u][i].m == NULL)
 	    edgecost = INFINITY;
 	  else if(u == i)
@@ -787,16 +623,13 @@ void dijkstra_single_source_shortest_paths(int source){
 	  else
 	    edgecost = A[u][i].m->edgecost;
 	  
-          if(/*A[u][i].*/edgecost > 0)
+          if(edgecost > 0)
             {
               if(A[source][i].mark!=1)
                 {
-		  
-                  //printf("pathestimate[i]=%d\tpathestime[u]=%d\n", pathestimate[i], pathestimate[u]);
-                  if(A[source][i].minpathcost > (A[source][u].minpathcost + edgecost /*A[u][i].edgecost*/))
+		  if(A[source][i].minpathcost > (A[source][u].minpathcost + edgecost))
                     {
-                      //printf(".");
-                      A[source][i].minpathcost = A[source][u].minpathcost + /*A[u][i].*/edgecost;
+                      A[source][i].minpathcost = A[source][u].minpathcost + edgecost;
                       A[source][i].predecessor=u;
                     }
                 }
@@ -846,7 +679,7 @@ void megbb(machine_t * tail){
 	  {
 	    //examine k+1 ... n edges after restoring edge k
 	    k = k->adjNext;	    
-	    while(k != NULL)//(k < max_edges)
+	    while(k != NULL)
 	      {
 		if(!EDGE_IN_E(k))
 		 goto next_edge;
@@ -859,7 +692,6 @@ void megbb(machine_t * tail){
 		    if(pathExists(k->ci,k->cj))
 		    {
 		      INSERT_EBAR(k);
-		      //colsFilled[k->cj] --;
 		      path_existed = 1;
 		    } 
 		  else 
@@ -912,7 +744,7 @@ void megbb(machine_t * tail){
 	    }
 	 }
       }
-  }//while (k > 0)
+  }//while (k!=NULL)
 
 #if DEBUG_MEGGB
   if (sumS != graphWeight)
@@ -924,7 +756,7 @@ void megbb(machine_t * tail){
 
 int main(int argc, char ** argv){
   int ret, i;
-  machine_t * tail;
+  //machine_t * tail;
   
   if( (ret=loadFile(argv[1])) < 0){
     fprintf(stderr, "input file format error '%s' (ret=%d).\n", argv[1], ret);
@@ -937,7 +769,7 @@ int main(int argc, char ** argv){
   fprintf(stderr, "graphWeight: %d\n", graphWeight);
   printEdgeAdj();
   printEdgeNames();
-  printEdgeWeights();//desc order
+  printEdgeWeights();
 #endif
 
   if (nEdges == nNodes){
@@ -950,12 +782,16 @@ int main(int argc, char ** argv){
 
   for(i=0; i<nNodes; i++)
     dijkstra_single_source_shortest_paths(i);
-  //printMinPaths();
+
+#if DEBUG_MEGBB
+  printMinPaths();
+#endif
 
   //find last element in adjacency list
+  /*
   tail = EdgesAdjHead;
   while (tail->adjNext != NULL)
-    tail = tail->adjNext;
+  tail = tail->adjNext;*/
 
   //initialize stuff and do first pass solution
   megbbinit();
@@ -967,8 +803,7 @@ int main(int argc, char ** argv){
     printAnswer();
     goto done;
   } 
-  megbb(tail);
-  
+  megbb(EdgesAdjTail);//tail);
   printAnswer();
   done:
   //cleanup for good form
