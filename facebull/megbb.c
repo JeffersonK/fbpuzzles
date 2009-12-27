@@ -424,7 +424,7 @@ int loadFile(char * filename) {
     graphWeight += cost;
     insertEdgeAdj(ptr);
     insertEdgeName(ptr);
-    insertEdgeCost(ptr);   
+    //insertEdgeCost(ptr);   
     nEdges ++;
   }	
   fclose(f);
@@ -478,6 +478,79 @@ int pathExists(short src, short dst){
       p = p->adjNext;
   }
   return mark[dst];
+}
+
+
+/*****
+ *
+ *
+ *****/
+int minimum(compound_t *m,int k)
+{
+  float mi=INFINITY;
+  int i,t=-1;
+  for(i=0;i<k;i++)
+    {
+      if(m[i].mark!=1)
+        {
+          if(mi>=m[i].minpathcost)
+            {
+              mi=m[i].minpathcost;
+              t=i;
+            }
+        }
+    }
+#if DEBUG_ASSERT
+  assert(t >= 0);
+#endif
+  return t;
+}
+
+void dijkstra_single_source_shortest_paths(int source){
+  int i, count, u;
+  float edgecost = INFINITY;
+  for(i=0;i<nNodes;i++)
+    {
+      A[source][i].mark=0;
+      A[source][i].minpathcost = INFINITY;
+      A[source][i].predecessor = -1;
+    }
+  A[source][source].minpathcost = 0;
+
+  count = 0;
+  while(count<nNodes)
+    {
+      u=minimum((compound_t *)&A[source][0],nNodes);
+      count++;
+      A[source][u].mark=1;
+#if DEBUG_ASSERT
+      assert(source >= 0 && source < nNodes);
+      assert(u>=0 && u < nNodes);
+#endif
+      for(i=0;i<nNodes;i++)
+        {
+	  if(A[u][i].m == NULL)
+	    edgecost = INFINITY;
+	  else if(u == i)
+	    edgecost = 0;
+	  else
+	    edgecost = A[u][i].m->edgecost;
+	  
+          if(edgecost > 0)
+            {
+              if(A[source][i].mark!=1)
+                {
+		  if(A[source][i].minpathcost > (A[source][u].minpathcost + edgecost))
+                    {
+                      A[source][i].minpathcost = A[source][u].minpathcost + edgecost;
+                      A[source][i].predecessor=u;
+                    }
+                }
+            }
+        }
+    }
+
+  return;
 }
 
 /***
@@ -568,78 +641,6 @@ void megbbinit(void){
   return;
 }
 
-/*****
- *
- *
- *****/
-int minimum(compound_t *m,int k)
-{
-  float mi=INFINITY;
-  int i,t=-1;
-  for(i=0;i<k;i++)
-    {
-      if(m[i].mark!=1)
-        {
-          if(mi>=m[i].minpathcost)
-            {
-              mi=m[i].minpathcost;
-              t=i;
-            }
-        }
-    }
-#if DEBUG_ASSERT
-  assert(t >= 0);
-#endif
-  return t;
-}
-
-void dijkstra_single_source_shortest_paths(int source){
-  int i, count, u;
-  float edgecost = INFINITY;
-  for(i=0;i<nNodes;i++)
-    {
-      A[source][i].mark=0;
-      A[source][i].minpathcost = INFINITY;
-      A[source][i].predecessor = -1;
-    }
-  A[source][source].minpathcost = 0;
-
-  count = 0;
-  while(count<nNodes)
-    {
-      u=minimum((compound_t *)&A[source][0],nNodes);
-      count++;
-      A[source][u].mark=1;
-#if DEBUG_ASSERT
-      assert(source >= 0 && source < nNodes);
-      assert(u>=0 && u < nNodes);
-#endif
-      for(i=0;i<nNodes;i++)
-        {
-	  if(A[u][i].m == NULL)
-	    edgecost = INFINITY;
-	  else if(u == i)
-	    edgecost = 0;
-	  else
-	    edgecost = A[u][i].m->edgecost;
-	  
-          if(edgecost > 0)
-            {
-              if(A[source][i].mark!=1)
-                {
-		  if(A[source][i].minpathcost > (A[source][u].minpathcost + edgecost))
-                    {
-                      A[source][i].minpathcost = A[source][u].minpathcost + edgecost;
-                      A[source][i].predecessor=u;
-                    }
-                }
-            }
-        }
-    }
-
-  return;
-}
-
 /********
  *
  * 
@@ -655,26 +656,25 @@ void megbb(machine_t * tail){
   nS = 0;
   sumS = 0;
   while(k!=NULL){
-    if(EDGE_IN_E(k)){
-      INSERT_S(k);
-      k = k->adjPrev;
-    }
+    if(EDGE_IN_E(k))
+      {
+	INSERT_S(k);
+	k = k->adjPrev;
+      }
     else if (k->edgecost > A[k->ci][k->cj].minpathcost){
       //no point in adding it back if we know its not part of soln
       INSERT_S(k);
       k = k->adjPrev;
-
-      } else 
+    } else 
       {//it's an edge we previously deleted, try forward move
-	    INSERT_E(k);
-
+	INSERT_E(k);
 #if WITH_PRUNING	
-	    if((sumEbar + sumS - minSumRows[k->ci+1]) <= sumEbarprime)
+	if((sumEbar + sumS - minSumRows[k->ci+1]) <= sumEbarprime)
 	  //if ( (nEbar + nS - (nNodes - (k->ci+1)) ) <= nEbarprime)
-	      {
-		INSERT_S(k);	  
-	      } 
-	    else 
+	  {
+	    INSERT_S(k);	  
+	  } 
+	else 
 #endif 
 	  {
 	    //examine k+1 ... n edges after restoring edge k
@@ -682,24 +682,22 @@ void megbb(machine_t * tail){
 	    while(k != NULL)
 	      {
 		if(!EDGE_IN_E(k))
-		 goto next_edge;
-
+		  goto next_edge;
 		REMOVE_S(k);
 		path_existed = 0;
 		if ( (Vout[k->ci] != 1) && (Vin[k->cj] != 1) )
 		  {
 		    k->edgeset = NO_EDGE;//set hypothesis
 		    if(pathExists(k->ci,k->cj))
-		    {
-		      INSERT_EBAR(k);
-		      path_existed = 1;
-		    } 
-		  else 
-		    {
-		      k->edgeset = E_EDGE;//unset hypothesis
-		    }
-		}
-
+		      {
+			INSERT_EBAR(k);
+			path_existed = 1;
+		      } 
+		    else 
+		      {
+			k->edgeset = E_EDGE;//unset hypothesis
+		      }
+		  }
 #if WITH_PRUNING		
 		if(!path_existed && ((sumEbar + sumS - minSumRows[k->ci+1]) <= sumEbarprime))
 		  //(!path_existed && ((nEbar + nS - (nNodes - (k->ci+1)) ) <= nEbarprime) )
@@ -720,7 +718,7 @@ void megbb(machine_t * tail){
 		    updateOptimumSoln(sumEbar);
 		  break;
 		}
-
+		
 		//we have reached the theoretical 
 		//minimum solution for this graph
 		//i.e. sum of all row minimums
@@ -733,30 +731,29 @@ void megbb(machine_t * tail){
 		  updateOptimumSoln(sumEbar);
 		}
 	      next_edge:
-	      k = k->adjNext;
+		k = k->adjNext;
 	      }//while (kk != NULL)
-
+	    
 	    if (k==NULL)
 	      k = tail;
-	    	    
+	    
 	    if(sumEbar > sumEbarprime){
 	      updateOptimumSoln(sumEbar);
 	    }
-	 }
+	  }
       }
   }//while (k!=NULL)
-
+  
 #if DEBUG_MEGGB
   if (sumS != graphWeight)
     fprintf(stderr, "sumS: %d != graphWeight: %d\n", sumS, graphWeight);
 #endif
-
+  
   return;
 }
 
 int main(int argc, char ** argv){
   int ret, i;
-  //machine_t * tail;
   
   if( (ret=loadFile(argv[1])) < 0){
     fprintf(stderr, "input file format error '%s' (ret=%d).\n", argv[1], ret);
@@ -786,28 +783,21 @@ int main(int argc, char ** argv){
 #if DEBUG_MEGBB
   printMinPaths();
 #endif
-
-  //find last element in adjacency list
-  /*
-  tail = EdgesAdjHead;
-  while (tail->adjNext != NULL)
-  tail = tail->adjNext;*/
-
   //initialize stuff and do first pass solution
   megbbinit();
 
   //if we can't delete any edges or we have already found the theoretically 
   //minimum solution in the first pass (sum of min weight edges from each row)
   //we're done
-  if( (nEbar == 0) || (minSumRows[0] == (graphWeight - sumEbarprime)) ){
-    printAnswer();
+  if( (nEbar == 0) || (minSumRows[0] == (graphWeight - sumEbarprime)) )
     goto done;
-  } 
-  megbb(EdgesAdjTail);//tail);
+  
+  megbb(EdgesAdjTail);
+ 
+ done:
   printAnswer();
-  done:
   //cleanup for good form
   freeEdges(EdgesAdjHead);
-  EdgesAdjHead = EdgesNameHead = EdgesCostHead = NULL;
+  EdgesAdjHead = EdgesAdjTail = EdgesNameHead = EdgesCostHead = NULL;
   return (0);
 }
