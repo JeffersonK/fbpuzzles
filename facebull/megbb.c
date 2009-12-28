@@ -392,29 +392,24 @@ int loadFile(char * filename) {
 		compoundA,
 		compoundB,
 		&cost) == 4){
-
     machIntName = (short) atoi(machineName+1);
     u = atoi(compoundA+1);
     if( (uindex=insert2index(u, compoundIndex, &nNodes, MAX_NODES)) == MEMORY_OVERFLOW){
       return MEMORY_OVERFLOW;//ran out of memory allocated
     }
-
     v = atoi(compoundB+1);
     if((vindex=insert2index(v, compoundIndex, &nNodes, MAX_NODES)) == MEMORY_OVERFLOW){
       return MEMORY_OVERFLOW;//ran out of memory allocated
     }
-
 #if DEBUG_LOADFILE
     fprintf(stderr, "add (M(%d) C(%d=>%d) C(%d=>%d) %d\n", machIntName, u, uindex, v, vindex, cost);
 #endif
     if (nEdges >= MAX_NODES)
       return MEMORY_OVERFLOW;
-
     ptr = (machine_t*) malloc(sizeof(machine_t));  
     if (ptr == NULL)
       return MEMORY_OVERFLOW;
-    memset((void *) ptr, 0x0, sizeof(machine_t));
-
+    //memset((void *) ptr, 0x0, sizeof(machine_t));
     A[uindex][vindex].m = ptr;
     ptr->edgeset = E_EDGE;
     ptr->edgeRealName = machIntName;
@@ -583,7 +578,7 @@ void megbbinit(void){
 
 #if DEBUG_MEGBB
       fprintf(stderr, "min in row %d is %d\n", i, min);
-      fprintf(stderr, "max in row %d is %d\n", i, max);
+      //fprintf(stderr, "max in row %d is %d\n", i, max);
 #endif
       minSumRows[i] = min;
       i = p->ci;
@@ -673,6 +668,7 @@ void megbb(machine_t * tail){
 	  //if ( (nEbar + nS - (nNodes - (k->ci+1)) ) <= nEbarprime)
 	  {
 	    INSERT_S(k);	  
+	    INSERT_EBAR(k);
 	  } 
 	else 
 #endif 
@@ -722,10 +718,10 @@ void megbb(machine_t * tail){
 		//we have reached the theoretical 
 		//minimum solution for this graph
 		//i.e. sum of all row minimums
-		if((graphWeight - sumEbar) == minSumRows[0]){
+		/*if((graphWeight - sumEbar) == minSumRows[0]){
 		  updateOptimumSoln(sumEbar);
 		  return;
-		}
+		  }*/
 #endif
 		if (sumEbar > sumEbarprime){
 		  updateOptimumSoln(sumEbar);

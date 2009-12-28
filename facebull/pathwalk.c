@@ -555,7 +555,7 @@ void incCrossedEdges(int u, int v, int dst){
   int vtmp = v;
   while(u != vtmp){
     A[A[u][vtmp].predecessor][vtmp].m->crossed++;
-    printf("xing - %d (%d,%d)\n", A[A[u][vtmp].predecessor][vtmp].m->edgeRealName, A[u][vtmp].predecessor, vtmp);
+    //printf("xing - %d (%d,%d)\n", A[A[u][vtmp].predecessor][vtmp].m->edgeRealName, A[u][vtmp].predecessor, vtmp);
     //don't increment for last node on path, or we'll end up
      //double counting the visit
     if (vtmp != dst) {
@@ -585,7 +585,7 @@ void decCrossedEdges(int u, int v, int dst){
   int vtmp = v;
   while(u != vtmp){
     A[A[u][vtmp].predecessor][vtmp].m->crossed--;
-    printf("unxing - %d (%d,%d)\n", A[A[u][vtmp].predecessor][vtmp].m->edgeRealName, A[u][vtmp].predecessor, vtmp);
+    //printf("unxing - %d (%d,%d)\n", A[A[u][vtmp].predecessor][vtmp].m->edgeRealName, A[u][vtmp].predecessor, vtmp);
 
      //don't increment for last node on path, or we'll end up
      //double counting the visit
@@ -606,8 +606,8 @@ void walk(int node, float totCost) {
     uniqueVisited++;
   visited[node]++; 
   
-  if ( /*(node == startNode) 
-	 &&*/ (uniqueVisited == nNodes) ){
+  if ( (node == startNode) 
+	 && (uniqueVisited == nNodes) ){
     if(totCost < best)
       updateOptimumSoln(totCost);
     return;
@@ -678,19 +678,19 @@ int main(int argc, char ** argv){
 
   for(i=0; i<nNodes; i++)
     dijkstra_single_source_shortest_paths(i);
-  printMinPaths();
+  //printMinPaths();
 
-  for(i=0; i<nNodes; i++){
-    uniqueVisited = 0;
+  //for(i=0; i<nNodes; i++){
+  uniqueVisited = 0;
   //reset visited list
-    for(j = 0;j<nNodes; j++)     
-      visited[j] = 0;
+  for(j = 0;j<nNodes; j++)     
+    visited[j] = 0;
   
-    best = graphWeight;
-    startNode = i;
+  best = graphWeight;
+  startNode = 0;
     walk(startNode, 0);
     printAnswer();
-  }
+    //}
  done:
   //cleanup for good form
   freeEdges(EdgesAdjHead);

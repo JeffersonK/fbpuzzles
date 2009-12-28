@@ -87,7 +87,7 @@ def generateRandomSoln(n, m, c=1, minWeight=MIN_WEIGHT, maxWeight=MAX_WEIGHT):
     #generate edges in the path
     for i in range(0,len(minpath)):
         solutionE.append((minpath[i],minpath[(i+1)%len(minpath)]))
-    #print solutionE
+    print solutionE
         
     #generate the edges that won't be part of the solution
     nonSolE = []
@@ -111,13 +111,25 @@ def generateRandomSoln(n, m, c=1, minWeight=MIN_WEIGHT, maxWeight=MAX_WEIGHT):
     #create at networkx graph object with the solution edgeset        
     G = nx.DiGraph()
     for (u,v) in solutionE:
-        G.add_edges_from([(u,v,{'weight':minWeight, 'label':machineIDs[0], 'solution':True})])
-        machineIDs = machineIDs[1:]
+        #G.add_edges_from([(u,v,{'weight':random.randint(minWeight,maxWeight), 'label':machineIDs[0], 'solution':True})])
+        G.add_edge(u,v,random.randint(minWeight,maxWeight))
+        #machineIDs = machineIDs[1:]
 
     for (u,v) in nonSolE:
-        G.add_edges_from([(u,v,{'label':machineIDs[0],'weight':maxWeight,'solution':False})])
-        machineIDs = machineIDs[1:]
+        l = nx.single_source_dijkstra_path_length(G,u)
+        print u,l[v]
+        #G.add_edges_from([(u,v,{'label':machineIDs[0],'weight':l[v]+100,'solution':False})])
+        G.add_edge(u,v,random.randint(l[v],l[v]+10))
+        #machineIDs = machineIDs[1:]
 
+    for n,nbrs in G.adjacency_iter():
+        for nbr,eattr in nbrs.iteritems():
+            G.remove_edge(n, nbr)
+            if (n,nbr) in solutionE:
+                G.add_edges_from([(n,nbr,{'label':machineIDs[0],'weight':eattr,'solution':True})])
+            else:
+                G.add_edges_from([(n,nbr,{'label':machineIDs[0],'weight':eattr,'solution':False})])
+            machineIDs = machineIDs[1:]
     #save the current set of edge numbers as the solution set E'
     #fill in with random edges that aren't part of the solution to fill out E
     #every edge we generate after solution must be an edge such that Cost(u,v) >= minpath(u,v)            
@@ -145,12 +157,11 @@ def generateClusteredSolnType2(n, m):
          
 
 def main():
-    G = generateRandomSoln(100, 150, 1)
+    G = generateRandomSoln(110, 200, 1)
     writeGraphToFile("graph",G)
 
-    G2 = readGraphFromFile("graph.in")
-    
-    createGraphPng(G2, 'graph') 
+    #G2 = readGraphFromFile("graph.in")
+    #createGraphPng(G2, 'graph') 
     return
 
 
